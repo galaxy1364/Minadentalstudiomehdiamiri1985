@@ -88,9 +88,11 @@ export const NotificationDrawer: React.FC<NotificationDrawerProps> = ({
   ]);
 
   const unreadCount = notifications.filter(n => !n.isRead).length;
+  const lastReportedCount = React.useRef<number>(unreadCount);
 
   React.useEffect(() => {
-    if (onUnreadCountChange) {
+    if (onUnreadCountChange && lastReportedCount.current !== unreadCount) {
+      lastReportedCount.current = unreadCount;
       onUnreadCountChange(unreadCount);
     }
   }, [unreadCount, onUnreadCountChange]);

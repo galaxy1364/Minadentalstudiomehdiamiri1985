@@ -1,4 +1,27 @@
 import { Patient, Appointment, InventoryItem, SayadCheck, Installment, LabOrder, ImplantCase, PaymentRecord } from '../types/dental';
+import { getCurrentPersianDate, getRelativePersianDate } from '../utils/jalali';
+
+// Dynamic Persian dates computed live from native Intl
+const today = getCurrentPersianDate();
+const tomorrow = getRelativePersianDate(1);
+const inTwoDays = getRelativePersianDate(2);
+const inFiveDays = getRelativePersianDate(5);
+const nextWeek = getRelativePersianDate(7);
+const inTenDays = getRelativePersianDate(10);
+const inTwoWeeks = getRelativePersianDate(14);
+const inThreeWeeks = getRelativePersianDate(21);
+const nextMonth = getRelativePersianDate(30);
+const inTwoMonths = getRelativePersianDate(60);
+const inThreeMonths = getRelativePersianDate(90);
+
+const yesterday = getRelativePersianDate(-1);
+const pastThreeDays = getRelativePersianDate(-3);
+const pastFiveDays = getRelativePersianDate(-5);
+const pastSevenDays = getRelativePersianDate(-7);
+const pastTenDays = getRelativePersianDate(-10);
+const pastTwoWeeks = getRelativePersianDate(-14);
+const pastMonth = getRelativePersianDate(-30);
+const pastTwoMonths = getRelativePersianDate(-60);
 
 export const INITIAL_PATIENTS: Patient[] = [
   {
@@ -14,8 +37,8 @@ export const INITIAL_PATIENTS: Patient[] = [
     paidAmount: 22000000,
     balance: -16500000, // ۱۶.۵ میلیون تومان بدهکار (اقساط)
     activeTreatmentsCount: 3,
-    lastVisit: '۱۴۰۳/۰۸/۱۰',
-    nextAppointment: '۱۴۰۳/۰۸/۱۶ - ۱۶:۳۰',
+    lastVisit: pastFiveDays,
+    nextAppointment: `${tomorrow} - ۱۶:۳۰`,
     notes: 'در حال تکمیل فیکسچر ایمپلنت دندان ۶ و روکش زیرکونیا دندان ۵ بالا راست.',
     teethConditions: {
       'UR_6': {
@@ -26,7 +49,8 @@ export const INITIAL_PATIENTS: Patient[] = [
         status: 'in_progress',
         notes: 'فیکسچر کاشته شده، در انتظار موعد هیلینگ',
         cost: 18000000,
-        date: '۱۴۰۳/۰۷/۱۵'
+        doctorName: 'دکتر مهدی امیری',
+        date: pastMonth
       },
       'UR_5': {
         quadrant: 'UR',
@@ -36,7 +60,8 @@ export const INITIAL_PATIENTS: Patient[] = [
         status: 'in_progress',
         notes: 'قالب‌گیری ارسال به لابراتوار',
         cost: 6500000,
-        date: '۱۴۰۳/۰۸/۰۲'
+        doctorName: 'دکتر مهدی امیری',
+        date: pastTenDays
       },
       'LL_6': {
         quadrant: 'LL',
@@ -44,9 +69,11 @@ export const INITIAL_PATIENTS: Patient[] = [
         surfaces: ['occlusal', 'mesial'],
         treatment: 'composite',
         status: 'completed',
-        notes: 'ترمیم کامپوزیت ۲ سطحی',
+        notes: 'ترمیم کامپوزیت خلفی کلاس ۲ با رابردم',
         cost: 2400000,
-        date: '۱۴۰۳/۰۶/۲۰'
+        doctorName: 'دکتر مهدی امیری',
+        date: pastTwoMonths,
+        annotations: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="320" height="320" viewBox="0 0 320 320"><path d="M130,135 Q160,120 190,145 T200,185" stroke="%23ef4444" stroke-width="6" fill="none" stroke-linecap="round"/><circle cx="160" cy="160" r="15" fill="%23ef4444" fill-opacity="0.75"/><path d="M125,170 Q145,190 175,180" stroke="%2338bdf8" stroke-width="5" fill="none" stroke-linecap="round"/></svg>'
       }
     },
     sayadChecks: [
@@ -57,7 +84,7 @@ export const INITIAL_PATIENTS: Patient[] = [
         sayadId: '۷۳۰۱۸۴۹۲۱۶۴۸۵۲۱۰',
         bankName: 'بانک ملت',
         amount: 10000000,
-        dueDate: '۱۴۰۳/۰۸/۲۵',
+        dueDate: inTenDays,
         drawerName: 'علی مرادی',
         status: 'in_collection',
         isGuarantee: false,
@@ -70,7 +97,7 @@ export const INITIAL_PATIENTS: Patient[] = [
         sayadId: '۴۱۸۰۹۲۶۳۵۱۷۲۸۰۳۴',
         bankName: 'بانک صادرات',
         amount: 6500000,
-        dueDate: '۱۴۰۳/۰۹/۲۵',
+        dueDate: nextMonth,
         drawerName: 'علی مرادی',
         status: 'in_collection',
         isGuarantee: false,
@@ -83,7 +110,7 @@ export const INITIAL_PATIENTS: Patient[] = [
         sayadId: '۹۹۰۱۴۴۲۸۷۱۶۰۹۹۴۵',
         bankName: 'بانک ملت',
         amount: 25000000,
-        dueDate: '۱۴۰۳/۱۰/۳۰',
+        dueDate: inTwoMonths,
         drawerName: 'علی مرادی',
         status: 'in_collection',
         isGuarantee: true,
@@ -99,8 +126,8 @@ export const INITIAL_PATIENTS: Patient[] = [
         installmentNumber: 1,
         totalInstallments: 3,
         amount: 6000000,
-        dueDate: '۱۴۰۳/۰۷/۲۵',
-        paidDate: '۱۴۰۳/۰۷/۲۵',
+        dueDate: pastTenDays,
+        paidDate: pastTenDays,
         status: 'paid',
         paymentMethod: 'pos'
       },
@@ -112,7 +139,7 @@ export const INITIAL_PATIENTS: Patient[] = [
         installmentNumber: 2,
         totalInstallments: 3,
         amount: 10000000,
-        dueDate: '۱۴۰۳/۰۸/۲۵',
+        dueDate: inTenDays,
         status: 'pending',
         paymentMethod: 'check'
       },
@@ -124,7 +151,7 @@ export const INITIAL_PATIENTS: Patient[] = [
         installmentNumber: 3,
         totalInstallments: 3,
         amount: 6500000,
-        dueDate: '۱۴۰۳/۰۹/۲۵',
+        dueDate: nextMonth,
         status: 'pending',
         paymentMethod: 'check'
       }
@@ -138,9 +165,9 @@ export const INITIAL_PATIENTS: Patient[] = [
         workType: 'روکش تمام زیرکونیا مولتی‌لیر',
         labName: 'لابراتوار دیجیتال پیشرو',
         shade: 'A2',
-        sendDate: '۱۴۰۳/۰۸/۰۲',
-        deliveryDate: '۱۴۰۳/۰۸/۱۵',
-        appointmentDate: '۱۴۰۳/۰۸/۱۶',
+        sendDate: pastTenDays,
+        deliveryDate: today,
+        appointmentDate: tomorrow,
         status: 'ready_for_clinic',
         cost: 2200000,
         reminderNotice: 'کار آماده تحویل به مطب است (نوبت فردا ساعت ۱۶:۳۰)'
@@ -158,8 +185,8 @@ export const INITIAL_PATIENTS: Patient[] = [
         torque: 45,
         boneGraft: true,
         membrane: true,
-        surgeryDate: '۱۴۰۳/۰۷/۱۵',
-        healingDueDate: '۱۴۰۳/۰۹/۱۵',
+        surgeryDate: pastMonth,
+        healingDueDate: inTwoMonths,
         currentStage: 'fixture_placed',
         notes: 'پیوند پودر استخوان انجام شد، تورک اولیه عالی.'
       }
@@ -170,7 +197,7 @@ export const INITIAL_PATIENTS: Patient[] = [
         patientId: 'pat-1',
         patientName: 'علی مرادی',
         amount: 16000000,
-        date: '۱۴۰۳/۰۷/۱۵',
+        date: pastMonth,
         method: 'pos',
         referenceNumber: '۷۲۸۴۹۱۲۸',
         terminalName: 'دستگاه کارتخوان سامان یونیت ۱',
@@ -181,7 +208,7 @@ export const INITIAL_PATIENTS: Patient[] = [
         patientId: 'pat-1',
         patientName: 'علی مرادی',
         amount: 6000000,
-        date: '۱۴۰۳/۰۷/۲۵',
+        date: pastTenDays,
         method: 'card_to_card',
         referenceNumber: '۹۸۴۵۱۲',
         forTreatment: 'قسط اول درمانی'
@@ -191,7 +218,7 @@ export const INITIAL_PATIENTS: Patient[] = [
       {
         id: 'rx-1',
         patientId: 'pat-1',
-        date: '۱۴۰۳/۰۷/۱۵',
+        date: pastMonth,
         doctorName: 'دکتر مهدی امیری',
         items: [
           { medicationName: 'کپسول آموکسی‌سیلین ۵۰۰ میلی‌گرم', dosage: '۲۰ عدد', instructions: 'هر ۸ ساعت ۱ عدد بعد از غذا' },
@@ -207,7 +234,7 @@ export const INITIAL_PATIENTS: Patient[] = [
         patientId: 'pat-1',
         procedureType: 'surgery_implant',
         title: 'رضایت‌نامه آگاهانه جراحی ایمپلنت و پیوند استخوان',
-        signedDate: '۱۴۰۳/۰۷/۱۵',
+        signedDate: pastMonth,
         isConfirmed: true,
         notes: 'بیمار در مورد ریسک عدم اینتگریشن و اهمیت بهداشت دهان توجیه شد.'
       }
@@ -226,8 +253,8 @@ export const INITIAL_PATIENTS: Patient[] = [
     paidAmount: 28000000,
     balance: 0, // تسویه کامل
     activeTreatmentsCount: 1,
-    lastVisit: '۱۴۰۳/۰۸/۱۱',
-    nextAppointment: '۱۴۰۳/۰۸/۱۸ - ۱۸:۰۰',
+    lastVisit: pastThreeDays,
+    nextAppointment: `${nextWeek} - ۱۸:۰۰`,
     notes: 'لمینت سرامیکی E-Max فک بالا (۶ واحد قدامی)',
     teethConditions: {
       'UR_1': { quadrant: 'UR', toothNumber: 1, surfaces: ['buccal'], treatment: 'laminate', status: 'in_progress', cost: 4500000 },
@@ -248,12 +275,12 @@ export const INITIAL_PATIENTS: Patient[] = [
         workType: 'لمینت سرامیکی فوق‌نازک E-Max',
         labName: 'لابراتوار تخصصی رویال دنت',
         shade: 'BL2',
-        sendDate: '۱۴۰۳/۰۸/۱۱',
-        deliveryDate: '۱۴۰۳/۰۸/۱۷',
-        appointmentDate: '۱۴۰۳/۰۸/۱۸',
+        sendDate: pastThreeDays,
+        deliveryDate: inFiveDays,
+        appointmentDate: nextWeek,
         status: 'fabrication',
         cost: 12000000,
-        reminderNotice: 'در حال پخت پرسلن - تحویل ۱۷ آبان'
+        reminderNotice: 'در حال پخت پرسلن'
       }
     ],
     implantCases: [],
@@ -263,7 +290,7 @@ export const INITIAL_PATIENTS: Patient[] = [
         patientId: 'pat-2',
         patientName: 'سارا علیزاده',
         amount: 28000000,
-        date: '۱۴۰۳/۰۸/۱۱',
+        date: pastThreeDays,
         method: 'pos',
         referenceNumber: '۸۸۱۹۲۳۴۰',
         terminalName: 'کارتخوان پذیرش مطب',
@@ -284,8 +311,8 @@ export const INITIAL_PATIENTS: Patient[] = [
     paidAmount: 6000000,
     balance: -6800000,
     activeTreatmentsCount: 2,
-    lastVisit: '۱۴۰۳/۰۸/۰۸',
-    nextAppointment: '۱۴۰۳/۰۸/۱۶ - ۱۷:۳۰',
+    lastVisit: pastSevenDays,
+    nextAppointment: `${tomorrow} - ۱۷:۳۰`,
     notes: 'عصب‌کشی (اندو) تخصصی ۳ کانال دندان ۶ پایین چپ و پست و کور',
     teethConditions: {
       'LL_6': {
@@ -306,7 +333,7 @@ export const INITIAL_PATIENTS: Patient[] = [
         sayadId: '۵۵۴۰۱۸۲۹۳۶۴۱۷۸۲۰',
         bankName: 'بانک سپه',
         amount: 6800000,
-        dueDate: '۱۴۰۳/۰۸/۳۰',
+        dueDate: inTwoWeeks,
         drawerName: 'محمدرضا حسینی',
         status: 'in_collection',
         isGuarantee: false,
@@ -322,7 +349,7 @@ export const INITIAL_PATIENTS: Patient[] = [
         patientId: 'pat-3',
         patientName: 'محمدرضا حسینی',
         amount: 6000000,
-        date: '۱۴۰۳/۰۸/۰۸',
+        date: pastSevenDays,
         method: 'pos',
         referenceNumber: '۴۱۷۲۸۳۹۴',
         forTreatment: 'پیش‌پرداخت اندو تخصصی'
@@ -342,7 +369,7 @@ export const INITIAL_PATIENTS: Patient[] = [
     paidAmount: 8500000,
     balance: 0,
     activeTreatmentsCount: 0,
-    lastVisit: '۱۴۰۳/۰۸/۰۱',
+    lastVisit: pastTwoWeeks,
     notes: 'جرم‌گیری و بروساژ کامل + ترمیم کامپوزیت زیبایی',
     teethConditions: {},
     sayadChecks: [],
@@ -361,7 +388,7 @@ export const INITIAL_APPOINTMENTS: Appointment[] = [
     phone: '۰۹۱۲۳۴۵۶۷۸۹',
     unit: 'یونیت ۱',
     doctor: 'دکتر مهدی امیری',
-    date: '۱۴۰۳/۰۸/۱۵',
+    date: today,
     time: '۱۶:۳۰',
     durationMinutes: 45,
     treatment: 'امتحان و سمان روکش زیرکونیا UR5',
@@ -374,7 +401,7 @@ export const INITIAL_APPOINTMENTS: Appointment[] = [
     phone: '۰۹۱۹۷۶۵۴۳۲۱',
     unit: 'یونیت ۱',
     doctor: 'دکتر مهدی امیری',
-    date: '۱۴۰۳/۰۸/۱۵',
+    date: today,
     time: '۱۷:۳۰',
     durationMinutes: 60,
     treatment: 'جلسه دوم روت‌کانال (آبچوریشن ۳ کانال دندان ۶ پایین)',
@@ -387,7 +414,7 @@ export const INITIAL_APPOINTMENTS: Appointment[] = [
     phone: '۰۹۳۵۱۲۳۴۵۶۷',
     unit: 'یونیت ۲',
     doctor: 'دکتر مریم رضایی',
-    date: '۱۴۰۳/۰۸/۱۵',
+    date: today,
     time: '۱۸:۳۰',
     durationMinutes: 45,
     treatment: 'چکاپ و بررسی تماس لمینت‌ها',
@@ -400,7 +427,7 @@ export const INITIAL_APPOINTMENTS: Appointment[] = [
     phone: '۰۹۱۲۹۸۷۶۵۴۳',
     unit: 'اتاق جراحی',
     doctor: 'دکتر مهدی امیری',
-    date: '۱۴۰۳/۰۸/۱۵',
+    date: today,
     time: '۱۹:۱۵',
     durationMinutes: 30,
     treatment: 'معاینه و قالب‌گیری مطالعه',
@@ -412,12 +439,15 @@ export const INITIAL_INVENTORY: InventoryItem[] = [
   {
     id: 'inv-1',
     name: 'کامپوزیت فیلتک 3M مدل Z250 (رنگ A2)',
-    category: 'مواد ترمیمی',
+    category: 'کامپوزیت و ترمیم',
     stock: 8,
     unit: 'سرنگ ۴ گرمی',
     minAlert: 3,
-    expiryDate: '۱۴۰۴/۰۶/۳۰',
-    pricePerUnit: 2200000
+    expiryDate: getRelativePersianDate(300),
+    pricePerUnit: 2200000,
+    barcode: '626012345001',
+    qrCode: 'MINA-COMP-Z250-A2',
+    location: 'قفسه A-1 (مواد ترمیمی)'
   },
   {
     id: 'inv-2',
@@ -426,18 +456,24 @@ export const INITIAL_INVENTORY: InventoryItem[] = [
     stock: 140,
     unit: 'عدد',
     minAlert: 50,
-    expiryDate: '۱۴۰۴/۱۲/۱۵',
-    pricePerUnit: 38000
+    expiryDate: getRelativePersianDate(180),
+    pricePerUnit: 38000,
+    barcode: '626012345002',
+    qrCode: 'MINA-ANESTH-LIDO',
+    location: 'یخچال دارویی مطب'
   },
   {
     id: 'inv-3',
     name: 'فیکسچر ایمپلنت Dentium SuperLine قطر 4.5 طول 10',
     category: 'ایمپلنت و جراحی',
-    stock: 4,
+    stock: 1, // Below minAlert (3) - Critical low stock!
     unit: 'کیت استریل',
-    minAlert: 2,
-    expiryDate: '۱۴۰۶/۰۱/۰۱',
-    pricePerUnit: 8500000
+    minAlert: 3,
+    expiryDate: getRelativePersianDate(500),
+    pricePerUnit: 8500000,
+    barcode: '626012345003',
+    qrCode: 'MINA-IMP-DENT-4510',
+    location: 'کابینت جراحی ایمپلنت'
   },
   {
     id: 'inv-4',
@@ -446,18 +482,24 @@ export const INITIAL_INVENTORY: InventoryItem[] = [
     stock: 3,
     unit: 'ویال استریل',
     minAlert: 2,
-    expiryDate: '۱۴۰۵/۰۸/۲۰',
-    pricePerUnit: 4900000
+    expiryDate: getRelativePersianDate(400),
+    pricePerUnit: 4900000,
+    barcode: '626012345004',
+    qrCode: 'MINA-SURG-CERABONE',
+    location: 'کابینت جراحی ایمپلنت'
   },
   {
     id: 'inv-5',
     name: 'ماده قالب‌گیری سیلیکونی افزایشی Speedex (پوتی و واش)',
     category: 'پروتز و قالب‌گیری',
-    stock: 6,
+    stock: 1, // Below minAlert (2) - Low stock!
     unit: 'ست',
     minAlert: 2,
-    expiryDate: '۱۴۰۴/۱۱/۱۰',
-    pricePerUnit: 3400000
+    expiryDate: getRelativePersianDate(250),
+    pricePerUnit: 3400000,
+    barcode: '626012345005',
+    qrCode: 'MINA-PROSTH-SPEEDEX',
+    location: 'قفسه B-2 (پروتز)'
   },
   {
     id: 'inv-6',
@@ -466,7 +508,49 @@ export const INITIAL_INVENTORY: InventoryItem[] = [
     stock: 12,
     unit: 'بسته ۶ عددی',
     minAlert: 4,
-    expiryDate: '۱۴۰۵/۰۳/۱۵',
-    pricePerUnit: 2800000
+    expiryDate: getRelativePersianDate(365),
+    pricePerUnit: 2800000,
+    barcode: '626012345006',
+    qrCode: 'MINA-ENDO-PROTAPER',
+    location: 'قفسه C-1 (اندو)'
+  },
+  {
+    id: 'inv-7',
+    name: 'سر سوزن دندانپزشکی گیج ۲۷ بلند سوپا',
+    category: 'مصرفی و بهداشتی',
+    stock: 8, // Below minAlert (25) - Low stock!
+    unit: 'بسته ۱۰۰ عددی',
+    minAlert: 25,
+    expiryDate: getRelativePersianDate(420),
+    pricePerUnit: 145000,
+    barcode: '626012345007',
+    qrCode: 'MINA-DISP-NEEDLE27',
+    location: 'کمد انبار مصرفی'
+  },
+  {
+    id: 'inv-8',
+    name: 'باندینگ نسل پنجم Single Bond Universal 3M',
+    category: 'کامپوزیت و ترمیم',
+    stock: 5,
+    unit: 'بطری ۵ میلی‌لیتر',
+    minAlert: 2,
+    expiryDate: getRelativePersianDate(320),
+    pricePerUnit: 3100000,
+    barcode: '626012345008',
+    qrCode: 'MINA-COMP-BOND3M',
+    location: 'قفسه A-1 (مواد ترمیمی)'
+  },
+  {
+    id: 'inv-9',
+    name: 'دستکش نیتریل مشکی بدون پودر اپی‌پرودنت (M)',
+    category: 'مصرفی و بهداشتی',
+    stock: 4,
+    unit: 'بسته ۱۰۰ عددی',
+    minAlert: 6, // Low stock!
+    expiryDate: getRelativePersianDate(480),
+    pricePerUnit: 260000,
+    barcode: '626012345009',
+    qrCode: 'MINA-DISP-GLOVES-M',
+    location: 'کمد انبار مصرفی'
   }
 ];

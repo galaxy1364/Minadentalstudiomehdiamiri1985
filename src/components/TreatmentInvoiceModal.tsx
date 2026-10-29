@@ -1,7 +1,7 @@
 import React, { useRef } from 'react';
 import { X, Printer, CheckCircle2, ShieldCheck, DollarSign, Calendar, User, FileText } from 'lucide-react';
 import { Patient, ToothCondition } from '../types/dental';
-import { toPersianDigits, formatToman } from '../utils/jalali';
+import { toPersianDigits, formatToman, getCurrentPersianDate } from '../utils/jalali';
 
 interface TreatmentInvoiceModalProps {
   isOpen: boolean;
@@ -37,7 +37,7 @@ export const TreatmentInvoiceModal: React.FC<TreatmentInvoiceModalProps> = ({
     title: TREATMENT_TITLES[item.treatment] || item.treatment,
     cost: item.cost || 0,
     status: item.status,
-    date: item.date || '۱۴۰۳/۰۸/۱۵'
+    date: item.date || getCurrentPersianDate()
   }));
 
   const payments = patient.payments || [];
@@ -99,7 +99,7 @@ export const TreatmentInvoiceModal: React.FC<TreatmentInvoiceModalProps> = ({
 
             <div className="text-left font-mono text-[11px] space-y-0.5">
               <div><span className="font-sans text-slate-500">شماره قبض: </span><span className="font-bold text-slate-900">{toPersianDigits(Date.now().toString().slice(-6))}</span></div>
-              <div><span className="font-sans text-slate-500">تاریخ صدور: </span><span className="font-bold text-slate-900">۱۴۰۳/۰۸/۱۵</span></div>
+              <div><span className="font-sans text-slate-500">تاریخ صدور: </span><span className="font-bold text-slate-900">{getCurrentPersianDate()}</span></div>
             </div>
           </div>
 

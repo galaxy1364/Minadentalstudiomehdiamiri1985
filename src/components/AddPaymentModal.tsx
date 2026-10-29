@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
-import { X, Receipt } from 'lucide-react';
+import { X, Receipt, CreditCard, Send, CheckCircle2, Loader2, Sparkles, AlertCircle } from 'lucide-react';
 import { Patient, PaymentRecord } from '../types/dental';
-import { formatToman } from '../utils/jalali';
+import { formatToman, getCurrentPersianDate, toPersianDigits } from '../utils/jalali';
+import { hardwareBridgeService } from '../services/hardwareBridgeService';
+import { clinicalSmsService } from '../services/smsService';
 
 interface AddPaymentModalProps {
   isOpen: boolean;
@@ -21,20 +23,50 @@ export const AddPaymentModal: React.FC<AddPaymentModalProps> = ({
   const [method, setMethod] = useState<'pos' | 'card_to_card' | 'cash'>('pos');
   const [refNumber, setRefNumber] = useState('۸۳۹۱۸۲۴۷');
   const [forTreatment, setForTreatment] = useState('تسویه قسط درمانی / بیعانه');
+  const [sendReceiptSms, setSendReceiptSms] = useState(true);
+  const [posState, setPosState] = useState<'idle' | 'transmitting' | 'success' | 'failed'>('idle');
+  const [posMessage, setPosMessage] = useState<string>('');
 
   if (!isOpen) return null;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const currentPatient = patients.find(p => p.id === selectedPatientId) || patients[0];
+
+  const handleSendToPosTerminal = async () => {
+    if (amount <= 0) return;
+    setPosState('transmitting');
+    setPosMessage('در حال ارسال مبلغ به پایانه کارتخوان متصل... بیمار کارت بکشد.');
+    
+    try {
+      const resp = await hardwareBridgeService.sendPosTransaction({
+        amount,
+        patientName: currentPatient?.fullName || '',
+        patientFileNumber: currentPatient?.fileNumber || '',
+        description: forTreatment
+      });
+      if (resp.success && resp.status === 'approved') {
+        setPosState('success');
+        setPosMessage(`تراکنش تایید شد! مرجع RRN: ${resp.referenceNumber} (پیگیری: ${resp.traceNumber})`);
+        setRefNumber(resp.referenceNumber);
+      } else {
+        setPosState('failed');
+        setPosMessage(resp.message || 'خطا در برقراری ارتباط با پوز');
+      }
+    } catch {
+      setPosState('failed');
+      setPosMessage('عدم پاسخ از پایانه فروش');
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const patient = patients.find(p => p.id === selectedPatientId);
-    if (!patient) return;
+    if (!currentPatient) return;
 
     const newPayment: PaymentRecord = {
       id: `pay-${Date.now()}`,
-      patientId: selectedPatientId,
-      patientName: patient.fullName,
+      patientId: currentPatient.id,
+      patientName: currentPatient.fullName,
       amount,
-      date: '۱۴۰۳/۰۸/۱۵',
+      date: getCurrentPersianDate(),
       method,
       referenceNumber: refNumber,
       terminalName: method === 'pos' ? 'کارتخوان پذیرش مطب (به‌پرداخت ملت)' : undefined,
@@ -42,6 +74,20 @@ export const AddPaymentModal: React.FC<AddPaymentModalProps> = ({
     };
 
     onAddPayment(newPayment);
+
+    // Send SMS receipt if toggled
+    if (sendReceiptSms && currentPatient.phone) {
+      await clinicalSmsService.sendPatternSms(
+        currentPatient.phone,
+        currentPatient.fullName,
+        'installment_due',
+        {
+          amount: formatToman(amount),
+          dueDate: getCurrentPersianDate()
+        }
+      );
+    }
+
     onClose();
   };
 
@@ -55,7 +101,7 @@ export const AddPaymentModal: React.FC<AddPaymentModalProps> = ({
             </div>
             <div>
               <h3 className="text-sm font-black text-slate-900">ثبت پرداخت بیمار (کارتخوان POS / نقد)</h3>
-              <span className="text-[10px] text-emerald-700 font-bold">صندوق و تسویه حساب مطب</span>
+              <span className="text-[10px] text-emerald-700 font-bold">صندوق و تسویه حساب مطب مینادنتال</span>
             </div>
           </div>
           <button 
@@ -104,15 +150,47 @@ export const AddPaymentModal: React.FC<AddPaymentModalProps> = ({
 
           <div>
             <label className="text-slate-700 font-bold block mb-1">مبلغ پرداختی (تومان)</label>
-            <input
-              type="number"
-              value={amount}
-              onChange={(e) => setAmount(Number(e.target.value))}
-              className="w-full bg-white border border-emerald-200 rounded-xl px-3 py-2 text-slate-900 font-mono font-bold focus:outline-none focus:border-emerald-500 shadow-2xs"
-              required
-            />
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                value={amount}
+                onChange={(e) => setAmount(Number(e.target.value))}
+                className="w-full bg-white border border-emerald-200 rounded-xl px-3 py-2 text-slate-900 font-mono font-bold focus:outline-none focus:border-emerald-500 shadow-2xs"
+                required
+              />
+              {method === 'pos' && (
+                <button
+                  type="button"
+                  onClick={handleSendToPosTerminal}
+                  disabled={posState === 'transmitting'}
+                  className="shrink-0 px-3 py-2 rounded-xl bg-cyan-700 hover:bg-cyan-800 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm active:scale-95 transition-all disabled:opacity-50"
+                  title="ارسال مستقیم مبلغ به نمایشگر کارتخوان جهت کشیدن کارت توسط بیمار"
+                >
+                  {posState === 'transmitting' ? (
+                    <Loader2 className="w-4 h-4 animate-spin text-white" />
+                  ) : (
+                    <CreditCard className="w-4 h-4" />
+                  )}
+                  <span>ارسال به پوز</span>
+                </button>
+              )}
+            </div>
             <span className="text-[10.5px] text-emerald-700 font-bold mt-1 block">معادل: {formatToman(amount)}</span>
           </div>
+
+          {/* POS Feedback Banner */}
+          {posMessage && (
+            <div className={`p-2.5 rounded-xl text-[11px] font-bold flex items-center gap-2 border ${
+              posState === 'success' 
+                ? 'bg-emerald-50 border-emerald-300 text-emerald-800'
+                : posState === 'failed'
+                ? 'bg-rose-50 border-rose-300 text-rose-800'
+                : 'bg-cyan-50 border-cyan-300 text-cyan-800'
+            }`}>
+              {posState === 'success' ? <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" /> : <AlertCircle className="w-4 h-4 shrink-0" />}
+              <span>{posMessage}</span>
+            </div>
+          )}
 
           <div>
             <label className="text-slate-700 font-bold block mb-1">شماره پیگیری / ارجاع تراکنش</label>
@@ -134,6 +212,16 @@ export const AddPaymentModal: React.FC<AddPaymentModalProps> = ({
               className="w-full bg-white border border-emerald-200 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:border-emerald-500 shadow-2xs"
             />
           </div>
+
+          <label className="flex items-center gap-2 pt-1 text-slate-700 font-medium cursor-pointer">
+            <input
+              type="checkbox"
+              checked={sendReceiptSms}
+              onChange={(e) => setSendReceiptSms(e.target.checked)}
+              className="rounded accent-emerald-600 w-4 h-4"
+            />
+            <span className="text-[11px] font-bold">ارسال خودکار پیامک رسید پرداخت و مانده‌حساب به بیمار</span>
+          </label>
 
           <div className="pt-2 flex items-center gap-2">
             <button

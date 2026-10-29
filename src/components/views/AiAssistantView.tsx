@@ -39,8 +39,7 @@ export const AiAssistantView: React.FC = () => {
               <Sparkles className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="font-black text-sm text-slate-900">دستیار هوش مصنوعی کلینیکال (جمنای دنتال)</h3>
-              <p className="text-[11px] text-indigo-800 font-bold">مشاوره طرح درمان، تداخلات دارویی و گایدلاین‌های دندانپزشکی</p>
+              <h3 className="font-black text-sm text-slate-900">هوش مصنوعی</h3>
             </div>
           </div>
         </div>

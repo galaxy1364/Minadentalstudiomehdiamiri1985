@@ -14,11 +14,13 @@ export const SyncNotificationToast: React.FC<SyncNotificationToastProps> = ({
   onDismiss,
   onActionClick
 }) => {
-  if (!event) return null;
-
   React.useEffect(() => {
-    triggerHaptic('success');
+    if (event) {
+      triggerHaptic('success');
+    }
   }, [event?.id]);
+
+  if (!event) return null;
 
   const getIcon = () => {
     switch (event.type) {

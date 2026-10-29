@@ -2,7 +2,8 @@ import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { 
   Search, X, User, Phone, FileText, Activity, 
   UserPlus, Sparkles, ChevronLeft, Calendar, 
-  Layers, AlertCircle, CheckCircle2, ArrowUpRight
+  Layers, AlertCircle, CheckCircle2, ArrowUpRight,
+  PhoneCall, Hash, Contact2, Filter
 } from 'lucide-react';
 import { Patient } from '../types/dental';
 import { toPersianDigits, formatToman } from '../utils/jalali';
@@ -13,13 +14,14 @@ export interface DashboardPatientSearchProps {
   onSelectPatient: (patient: Patient) => void;
   onOpenPalmerChart?: (patient: Patient) => void;
   onOpenAppointment?: (patient: Patient) => void;
-  onQuickAdmission?: () => void;
+  onQuickAdmission?: (prefillQuery?: string) => void;
 }
 
-type QuickFilter = 'all' | 'today' | 'debtors' | 'lab' | 'implant';
+export type QuickFilter = 'all' | 'today' | 'debtors' | 'lab' | 'implant';
+export type SearchScope = 'all' | 'name' | 'phone' | 'file';
 
 /**
- * Normalizes Persian/Arabic characters and English/Persian digits
+ * Normalizes Persian/Arabic characters and English/Persian digits for real-time fuzzy matching
  */
 function normalizeQuery(str: string): string {
   if (!str) return '';
@@ -46,6 +48,7 @@ export const DashboardPatientSearch: React.FC<DashboardPatientSearchProps> = ({
   const [query, setQuery] = useState('');
   const [isFocused, setIsFocused] = useState(false);
   const [activeFilter, setActiveFilter] = useState<QuickFilter>('all');
+  const [searchScope, setSearchScope] = useState<SearchScope>('all');
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -60,7 +63,30 @@ export const DashboardPatientSearch: React.FC<DashboardPatientSearchProps> = ({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Filter patients based on query and active filter
+  // Keyboard shortcut listener (Cmd+K / Ctrl+K and custom focus event)
+  useEffect(() => {
+    const handleFocusSearch = () => {
+      inputRef.current?.focus();
+      inputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      setIsFocused(true);
+    };
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        handleFocusSearch();
+      }
+    };
+
+    window.addEventListener('minadental:focus-patient-search', handleFocusSearch);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('minadental:focus-patient-search', handleFocusSearch);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, []);
+
+  // Real-time filtering logic by name, phone number, or file number
   const filteredPatients = useMemo(() => {
     const normQ = normalizeQuery(query);
 
@@ -71,16 +97,24 @@ export const DashboardPatientSearch: React.FC<DashboardPatientSearchProps> = ({
         const normFile = normalizeQuery(patient.fileNumber || '');
         const normPhone = normalizeQuery(patient.phone || '');
         const normNational = normalizeQuery(patient.nationalId || '');
-        const normId = normalizeQuery(patient.id || '');
 
-        const matchesQuery = 
-          normName.includes(normQ) ||
-          normFile.includes(normQ) ||
-          normPhone.includes(normQ) ||
-          normNational.includes(normQ) ||
-          normId.includes(normQ);
+        let matchesSearch = false;
+        if (searchScope === 'name') {
+          matchesSearch = normName.includes(normQ);
+        } else if (searchScope === 'phone') {
+          matchesSearch = normPhone.includes(normQ);
+        } else if (searchScope === 'file') {
+          matchesSearch = normFile.includes(normQ);
+        } else {
+          // 'all': matches name, phone, or file number (also fallback national ID)
+          matchesSearch = 
+            normName.includes(normQ) ||
+            normPhone.includes(normQ) ||
+            normFile.includes(normQ) ||
+            normNational.includes(normQ);
+        }
 
-        if (!matchesQuery) return false;
+        if (!matchesSearch) return false;
       }
 
       // 2. Quick Category Filtering
@@ -94,15 +128,15 @@ export const DashboardPatientSearch: React.FC<DashboardPatientSearchProps> = ({
         );
       }
       if (activeFilter === 'lab') {
-        return (patient.labOrders && patient.labOrders.length > 0);
+        return Boolean(patient.labOrders && patient.labOrders.length > 0);
       }
       if (activeFilter === 'implant') {
-        return (patient.implantCases && patient.implantCases.length > 0);
+        return Boolean(patient.implantCases && patient.implantCases.length > 0);
       }
 
       return true;
     });
-  }, [patients, query, activeFilter]);
+  }, [patients, query, activeFilter, searchScope]);
 
   const handleClear = () => {
     triggerHaptic('light');
@@ -127,12 +161,19 @@ export const DashboardPatientSearch: React.FC<DashboardPatientSearchProps> = ({
     setIsFocused(true);
   };
 
+  const handleScopeClick = (scope: SearchScope) => {
+    triggerHaptic('selection');
+    setSearchScope(scope);
+    setIsFocused(true);
+    inputRef.current?.focus();
+  };
+
   const isDropdownOpen = isFocused && (query.trim().length > 0 || activeFilter !== 'all');
 
   return (
     <div ref={containerRef} className="relative w-full z-30 select-none">
-      {/* Main Persistent Search Card - iOS Spotlight Ergonomic Design */}
-      <div className="w-full bg-white/95 backdrop-blur-md rounded-[20px] p-2 sm:p-2.5 border border-slate-200/90 shadow-2xs transition-all duration-200 focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-500/20">
+      {/* Main Persistent Search Card - Patient Dashboard Header Search Bar */}
+      <div className="w-full bg-white/95 backdrop-blur-md rounded-[22px] p-2 sm:p-2.5 border border-slate-200/90 shadow-2xs transition-all duration-200 focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-500/20">
         
         {/* Input Bar with Embedded Quick Status */}
         <div className="relative flex items-center">
@@ -159,7 +200,12 @@ export const DashboardPatientSearch: React.FC<DashboardPatientSearchProps> = ({
                 setIsFocused(false);
               }
             }}
-            placeholder="جستجوی فوری بر اساس نام، شماره پرونده یا شماره تماس..."
+            placeholder={
+              searchScope === 'name' ? 'فیلتر بر اساس نام بیمار (مثلاً: امیری، محمدی)...' :
+              searchScope === 'phone' ? 'فیلتر بر اساس شماره تماس (مثلاً: ۰۹۱۲ یا ۹۸۷۶)...' :
+              searchScope === 'file' ? 'فیلتر بر اساس شماره پرونده (مثلاً: ۱۰۲۴ یا ۵۶)...' :
+              'جستجوی بلادرنگ بیمار بر اساس نام، شماره پرونده یا شماره تماس...'
+            }
             className="w-full bg-slate-50 hover:bg-slate-100/70 focus:bg-white text-slate-800 placeholder-slate-400 text-xs sm:text-[13px] font-medium pr-9 pl-9 py-2 rounded-xl border border-slate-200/90 focus:border-emerald-500 focus:outline-none transition-all shadow-inner"
             dir="rtl"
             autoComplete="off"
@@ -170,7 +216,7 @@ export const DashboardPatientSearch: React.FC<DashboardPatientSearchProps> = ({
           {query.trim().length > 0 && (
             <div className="absolute left-9 top-1/2 -translate-y-1/2 flex items-center gap-1 pointer-events-none">
               <span className="text-[10px] font-bold text-emerald-800 bg-emerald-100/90 px-1.5 py-0.5 rounded-full font-mono border border-emerald-300">
-                {toPersianDigits(filteredPatients.length)} مورد
+                {toPersianDigits(filteredPatients.length)} پرونده
               </span>
             </div>
           )}
@@ -188,8 +234,71 @@ export const DashboardPatientSearch: React.FC<DashboardPatientSearchProps> = ({
           )}
         </div>
 
-        {/* Quick Filter Chips (1-tap access) */}
-        <div className="flex items-center gap-1.5 mt-2 overflow-x-auto no-scrollbar pt-0.5 text-[10.5px]">
+        {/* Real-Time Filter Scope Selector Bar (Name / Phone / File Number / All) */}
+        <div className="flex items-center gap-1 mt-1.5 pb-1 border-b border-slate-100 text-[10px]">
+          <span className="text-[10px] font-bold text-slate-400 shrink-0 ml-1 flex items-center gap-0.5">
+            <Filter className="w-2.5 h-2.5" />
+            فیلتر در:
+          </span>
+
+          {/* All Fields */}
+          <button
+            type="button"
+            onClick={() => handleScopeClick('all')}
+            className={`px-2 py-0.5 rounded-md font-bold transition-all active:scale-95 ${
+              searchScope === 'all'
+                ? 'bg-slate-900 text-white shadow-2xs'
+                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+            }`}
+          >
+            همه فیلدها
+          </button>
+
+          {/* By Name */}
+          <button
+            type="button"
+            onClick={() => handleScopeClick('name')}
+            className={`px-2 py-0.5 rounded-md font-bold transition-all active:scale-95 flex items-center gap-0.5 ${
+              searchScope === 'name'
+                ? 'bg-emerald-600 text-white shadow-2xs'
+                : 'bg-emerald-50 text-emerald-800 border border-emerald-200/60 hover:bg-emerald-100'
+            }`}
+          >
+            <Contact2 className="w-2.5 h-2.5" />
+            <span>نام بیمار</span>
+          </button>
+
+          {/* By Phone */}
+          <button
+            type="button"
+            onClick={() => handleScopeClick('phone')}
+            className={`px-2 py-0.5 rounded-md font-bold transition-all active:scale-95 flex items-center gap-0.5 ${
+              searchScope === 'phone'
+                ? 'bg-sky-600 text-white shadow-2xs'
+                : 'bg-sky-50 text-sky-800 border border-sky-200/60 hover:bg-sky-100'
+            }`}
+          >
+            <Phone className="w-2.5 h-2.5" />
+            <span>شماره تماس</span>
+          </button>
+
+          {/* By File Number */}
+          <button
+            type="button"
+            onClick={() => handleScopeClick('file')}
+            className={`px-2 py-0.5 rounded-md font-bold transition-all active:scale-95 flex items-center gap-0.5 ${
+              searchScope === 'file'
+                ? 'bg-purple-600 text-white shadow-2xs'
+                : 'bg-purple-50 text-purple-800 border border-purple-200/60 hover:bg-purple-100'
+            }`}
+          >
+            <Hash className="w-2.5 h-2.5" />
+            <span>شماره پرونده</span>
+          </button>
+        </div>
+
+        {/* Quick Filter Category Chips (1-tap access) */}
+        <div className="flex items-center gap-1.5 mt-1.5 overflow-x-auto no-scrollbar pt-0.5 text-[10.5px]">
           <button
             onClick={() => handleFilterClick('all')}
             className={`px-2.5 py-1 rounded-lg font-bold shrink-0 transition-all active:scale-95 ${
@@ -198,7 +307,7 @@ export const DashboardPatientSearch: React.FC<DashboardPatientSearchProps> = ({
                 : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
             }`}
           >
-            همه بیماران ({toPersianDigits(patients.length)})
+            کل پرونده‌ها ({toPersianDigits(patients.length)})
           </button>
 
           <button
@@ -259,7 +368,7 @@ export const DashboardPatientSearch: React.FC<DashboardPatientSearchProps> = ({
           <div className="px-3 py-2 bg-emerald-50/90 border-b border-emerald-100 flex items-center justify-between text-xs">
             <span className="font-black text-slate-800 flex items-center gap-1.5">
               <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
-              <span>نتایج فوری (انتخاب با یک لمس):</span>
+              <span>نتایج لحظه‌ای ({toPersianDigits(filteredPatients.length)} مورد):</span>
             </span>
 
             <button
@@ -275,6 +384,10 @@ export const DashboardPatientSearch: React.FC<DashboardPatientSearchProps> = ({
             {filteredPatients.length > 0 ? (
               filteredPatients.map((patient) => {
                 const isDebtor = patient.balance < 0;
+                const normQ = normalizeQuery(query);
+                const matchesName = normQ && normalizeQuery(patient.fullName).includes(normQ);
+                const matchesPhone = normQ && normalizeQuery(patient.phone).includes(normQ);
+                const matchesFile = normQ && normalizeQuery(patient.fileNumber || '').includes(normQ);
 
                 return (
                   <div
@@ -299,12 +412,29 @@ export const DashboardPatientSearch: React.FC<DashboardPatientSearchProps> = ({
                           <span className="text-[10px] bg-slate-100 text-slate-600 font-bold px-1.5 py-0.5 rounded font-mono border border-slate-200">
                             پرونده #{toPersianDigits(patient.fileNumber || patient.id.replace('p', ''))}
                           </span>
+
+                          {/* Matching Reason Tag */}
+                          {matchesName && (
+                            <span className="text-[9px] bg-emerald-100 text-emerald-800 font-bold px-1.5 py-0.2 rounded-md">
+                              تطابق نام
+                            </span>
+                          )}
+                          {matchesPhone && (
+                            <span className="text-[9px] bg-sky-100 text-sky-800 font-bold px-1.5 py-0.2 rounded-md">
+                              تطابق تماس
+                            </span>
+                          )}
+                          {matchesFile && (
+                            <span className="text-[9px] bg-purple-100 text-purple-800 font-bold px-1.5 py-0.2 rounded-md">
+                              تطابق پرونده
+                            </span>
+                          )}
                         </div>
 
                         <div className="flex items-center gap-2.5 text-[10.5px] text-slate-500 font-medium">
-                          <span className="flex items-center gap-1 font-mono" dir="ltr">
+                          <span className="flex items-center gap-1 font-mono text-slate-700 font-bold" dir="ltr">
                             <Phone className="w-3 h-3 text-slate-400" />
-                            {patient.phone}
+                            {toPersianDigits(patient.phone)}
                           </span>
                           <span>•</span>
                           <span>{patient.gender} · {toPersianDigits(patient.age)} سال</span>
@@ -318,7 +448,20 @@ export const DashboardPatientSearch: React.FC<DashboardPatientSearchProps> = ({
 
                     {/* Quick 1-Tap Action Buttons */}
                     <div className="flex items-center gap-1 self-end sm:self-center shrink-0 pt-1 sm:pt-0">
-                      {/* 1. Palmer Chart */}
+                      {/* Direct Phone Call */}
+                      <a
+                        href={`tel:${patient.phone}`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          triggerHaptic('light');
+                        }}
+                        className="w-7 h-7 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 flex items-center justify-center transition-all active:scale-90"
+                        title={`تماس با ${patient.fullName}`}
+                      >
+                        <PhoneCall className="w-3.5 h-3.5" />
+                      </a>
+
+                      {/* Palmer Chart */}
                       {onOpenPalmerChart && (
                         <button
                           onClick={() => {
@@ -334,7 +477,23 @@ export const DashboardPatientSearch: React.FC<DashboardPatientSearchProps> = ({
                         </button>
                       )}
 
-                      {/* 2. Full File Modal */}
+                      {/* Schedule Appointment */}
+                      {onOpenAppointment && (
+                        <button
+                          onClick={() => {
+                            triggerHaptic('medium');
+                            setIsFocused(false);
+                            onOpenAppointment(patient);
+                          }}
+                          className="px-2 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-800 border border-blue-200 font-bold text-[10.5px] flex items-center gap-1 active:scale-95 transition-all"
+                          title="تعیین نوبت جدید"
+                        >
+                          <Calendar className="w-3 h-3" />
+                          <span>نوبت</span>
+                        </button>
+                      )}
+
+                      {/* Full File Modal */}
                       <button
                         onClick={() => handlePatientClick(patient)}
                         className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10.5px] flex items-center gap-1 active:scale-95 transition-all shadow-2xs"
@@ -348,17 +507,17 @@ export const DashboardPatientSearch: React.FC<DashboardPatientSearchProps> = ({
                 );
               })
             ) : (
-              /* No Results State */
+              /* No Results State with Quick Admission */
               <div className="p-6 text-center space-y-3">
                 <div className="w-10 h-10 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center mx-auto">
                   <User className="w-5 h-5" />
                 </div>
                 <div className="space-y-1">
                   <p className="text-xs font-bold text-slate-700">
-                    بیماری با مشخصات «{query}» یافت نشد
+                    بیماری با مشخصات «{query}» در {searchScope === 'name' ? 'اسامی' : searchScope === 'phone' ? 'شماره‌های تماس' : searchScope === 'file' ? 'شماره‌های پرونده' : 'سیستم'} یافت نشد
                   </p>
                   <p className="text-[11px] text-slate-500">
-                    می‌توانید بلافاصله برای این شخص پرونده دندانپزشکی جدید باز کنید.
+                    می‌توانید فوراً پرونده جدید برای این شخص تشکیل دهید.
                   </p>
                 </div>
 
@@ -367,7 +526,7 @@ export const DashboardPatientSearch: React.FC<DashboardPatientSearchProps> = ({
                     onClick={() => {
                       triggerHaptic('heavy');
                       setIsFocused(false);
-                      onQuickAdmission();
+                      onQuickAdmission(query);
                     }}
                     className="py-2 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs inline-flex items-center gap-1.5 shadow-sm active:scale-95 transition-all"
                   >
@@ -379,10 +538,10 @@ export const DashboardPatientSearch: React.FC<DashboardPatientSearchProps> = ({
             )}
           </div>
 
-          {/* Footer note */}
+          {/* Footer note with keyboard shortcut */}
           <div className="px-3 py-1.5 bg-slate-50 border-t border-slate-100 text-[10px] text-slate-500 flex items-center justify-between">
-            <span>جستجوی بلادرنگ در سیستم پرونده‌های کلینیک مینادنتال</span>
-            <span className="font-mono">کلید Esc برای بستن</span>
+            <span>فیلتر بلادرنگ: نام • شماره پرونده • شماره تماس</span>
+            <span className="font-mono">میانبر: Cmd + K / کلید Esc</span>
           </div>
         </div>
       )}

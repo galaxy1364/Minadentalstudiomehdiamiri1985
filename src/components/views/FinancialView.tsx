@@ -7,8 +7,10 @@ import {
   Search, ShieldAlert, Sparkles, AlertTriangle, Printer, BarChart3
 } from 'lucide-react';
 import { SayadCheck, Installment, Patient, PaymentRecord } from '../../types/dental';
-import { toPersianDigits, formatToman } from '../../utils/jalali';
+import { toPersianDigits, formatToman, getCurrentPersianDate } from '../../utils/jalali';
 import { FinancialWeeklyAnalytics } from '../FinancialWeeklyAnalytics';
+import { FinancialPerformanceChart } from '../FinancialPerformanceChart';
+import { InstallmentPlanModal } from '../InstallmentPlanModal';
 import { triggerHaptic } from '../../utils/haptics';
 
 interface FinancialViewProps {
@@ -17,6 +19,8 @@ interface FinancialViewProps {
   onOpenPatientFile: (patient: Patient) => void;
   onOpenPaymentModal?: () => void;
   onOpenInvoice?: (patient: Patient) => void;
+  onOpenCommissionModal?: () => void;
+  onSaveInstallmentPlan?: (patientId: string, installments: Installment[], checks: SayadCheck[], downPaymentAmount: number) => void;
 }
 
 export const FinancialView: React.FC<FinancialViewProps> = ({
@@ -24,10 +28,13 @@ export const FinancialView: React.FC<FinancialViewProps> = ({
   onOpenCheckModal,
   onOpenPatientFile,
   onOpenPaymentModal,
-  onOpenInvoice
+  onOpenInvoice,
+  onOpenCommissionModal,
+  onSaveInstallmentPlan
 }) => {
   const [activeSegment, setActiveSegment] = useState<'sayad' | 'guarantee' | 'installments' | 'receipts' | 'analytics'>('sayad');
   const [searchQuery, setSearchQuery] = useState('');
+  const [showInstallmentModal, setShowInstallmentModal] = useState(false);
   const [inquiryModalCheck, setInquiryModalCheck] = useState<SayadCheck | null>(null);
   const [inquiryLoading, setInquiryLoading] = useState(false);
   const [inquiryResult, setInquiryResult] = useState<any | null>(null);
@@ -63,7 +70,7 @@ export const FinancialView: React.FC<FinancialViewProps> = ({
         statusColor: 'white', // سفید = خوش‌حساب بدون چک برگشتی
         bouncedCount: 0,
         creditScore: 'عالی (رتبه A)',
-        lastUpdated: 'امروز ۱۴۰۳/۰۸/۱۵ - ۱۲:۳۰',
+        lastUpdated: `امروز ${getCurrentPersianDate()} - ۱۲:۳۰`,
         isPechakVerified: true
       });
     }, 1200);
@@ -182,7 +189,7 @@ export const FinancialView: React.FC<FinancialViewProps> = ({
               </span>
             </div>
 
-            <div className="grid grid-cols-3 gap-1.5 pt-0.5">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 pt-0.5">
               <button
                 onClick={() => {
                   triggerHaptic('medium');
@@ -215,6 +222,18 @@ export const FinancialView: React.FC<FinancialViewProps> = ({
               >
                 <Printer className="w-3 h-3" />
                 <span>فاکتور درمان</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  triggerHaptic('medium');
+                  onOpenCommissionModal?.();
+                }}
+                className="py-1.5 px-2 rounded-xl bg-violet-600 hover:bg-violet-700 text-white font-extrabold text-[11px] flex items-center justify-center gap-1 shadow-xs active:scale-[0.98] transition-all"
+                title="محاسبه هوشمند سهم‌بندی و پورسانت پزشکان"
+              >
+                <Award className="w-3 h-3" />
+                <span>سهم‌بندی پزشک</span>
               </button>
             </div>
           </div>
@@ -356,7 +375,17 @@ export const FinancialView: React.FC<FinancialViewProps> = ({
           <div className="space-y-2">
             <div className="flex items-center justify-between px-1">
               <span className="text-xs font-black text-slate-800">برنامه اقساط درمانی ({toPersianDigits(allInstallments.length)})</span>
-              <span className="text-[10px] text-slate-500 font-medium">طرح‌های اقساطی فعال</span>
+              
+              <button
+                onClick={() => {
+                  triggerHaptic('medium');
+                  setShowInstallmentModal(true);
+                }}
+                className="py-1 px-3 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-black text-xs flex items-center gap-1.5 shadow-2xs active:scale-95 transition-all"
+              >
+                <Calculator className="w-3.5 h-3.5 stroke-[2.5]" />
+                <span>قسط‌بندی جدید (ماشین‌حساب)</span>
+              </button>
             </div>
 
             {allInstallments.length === 0 ? (
@@ -463,9 +492,13 @@ export const FinancialView: React.FC<FinancialViewProps> = ({
           </div>
         )}
 
-        {/* TAB 5: WEEKLY REVENUE & COLLECTIONS ANALYTICS (RECHARTS) */}
+        {/* TAB 5: FINANCIAL PERFORMANCE & 30-DAY REVENUE TREND (RECHARTS DARK THEME) */}
         {activeSegment === 'analytics' && (
-          <div className="space-y-2 animate-in fade-in duration-200">
+          <div className="space-y-3 animate-in fade-in duration-200">
+            {/* 30-Day Revenue Trend vs Historical Average (Recharts Dark Theme Aesthetic) */}
+            <FinancialPerformanceChart patients={patients} />
+
+            {/* Weekly & Daily Breakdown Analysis */}
             <FinancialWeeklyAnalytics patients={patients} />
           </div>
         )}
@@ -538,6 +571,19 @@ export const FinancialView: React.FC<FinancialViewProps> = ({
           </div>
         </div>
       )}
+
+      {/* Automated Installment Plan Calculator Modal */}
+      <InstallmentPlanModal
+        isOpen={showInstallmentModal}
+        onClose={() => setShowInstallmentModal(false)}
+        patients={patients}
+        onSaveInstallmentPlan={(patientId, installments, checks, downPayment) => {
+          if (onSaveInstallmentPlan) {
+            onSaveInstallmentPlan(patientId, installments, checks, downPayment);
+          }
+          showToast('برنامه اقساط و چک‌های مربوطه با موفقیت در پرونده بیمار ثبت شد.');
+        }}
+      />
     </div>
   );
 };

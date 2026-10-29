@@ -4,6 +4,7 @@ import {
   Installment, LabOrder, ImplantCase, PaymentRecord, ImplantStage, LabStatus 
 } from '../types/dental';
 import { INITIAL_PATIENTS } from '../data/mockData';
+import { getCurrentPersianDate, getRelativePersianDate } from '../utils/jalali';
 
 // Supabase Environment or LocalStorage configuration
 const STORAGE_URL_KEY = 'minadental_supabase_url';
@@ -399,16 +400,50 @@ class SupabaseService {
   }
 
   // -------------------------------------------------------------
+  // PAYMENTS & FINANCIAL MODULE
+  // -------------------------------------------------------------
+  public async savePayment(payment: PaymentRecord): Promise<{ success: boolean; data: PaymentRecord }> {
+    const idx = this.mockDb.payments.findIndex(p => p.id === payment.id);
+    if (idx >= 0) {
+      this.mockDb.payments[idx] = payment;
+    } else {
+      this.mockDb.payments.unshift(payment);
+    }
+
+    if (this.client) {
+      try {
+        await this.client.from('payments').upsert({
+          id: payment.id,
+          patient_id: payment.patientId,
+          patient_name: payment.patientName,
+          amount: payment.amount,
+          date: payment.date,
+          method: payment.method,
+          for_treatment: payment.forTreatment,
+          updated_at: new Date().toISOString()
+        });
+      } catch (e) {
+        console.warn('Supabase savePayment error:', e);
+      }
+    }
+    return { success: true, data: payment };
+  }
+
+  // -------------------------------------------------------------
   // REAL-TIME CHANNEL SUBSCRIPTION
   // -------------------------------------------------------------
-  public subscribeToChanges(onEvent: (table: string, eventType: string, record: any) => void): () => void {
+  public subscribeToChanges(
+    onEvent: (table: string, eventType: string, record: any) => void,
+    onStatusChange?: (status: string, err?: any) => void
+  ): () => void {
     if (!this.client) {
+      onStatusChange?.('CLOSED', new Error('Supabase client not initialized'));
       return () => {};
     }
 
     try {
       const channel = this.client
-        .channel('minadental-realtime-all')
+        .channel(`minadental-realtime-all-${Date.now()}`)
         .on(
           'postgres_changes',
           { event: '*', schema: 'public' },
@@ -416,13 +451,22 @@ class SupabaseService {
             onEvent(payload.table, payload.eventType, payload.new || payload.old);
           }
         )
-        .subscribe();
+        .subscribe((status, err) => {
+          if (onStatusChange) {
+            onStatusChange(status, err);
+          }
+        });
 
       return () => {
-        this.client?.removeChannel(channel);
+        try {
+          this.client?.removeChannel(channel);
+        } catch {
+          // ignore channel removal error
+        }
       };
     } catch (e) {
       console.warn('Supabase realtime subscription failed:', e);
+      onStatusChange?.('CHANNEL_ERROR', e);
       return () => {};
     }
   }
@@ -514,7 +558,7 @@ class SupabaseService {
       paidAmount: 6000000,
       balance: -6000000,
       activeTreatmentsCount: 1,
-      lastVisit: '۱۴۰۳/۰۸/۱۵',
+      lastVisit: getCurrentPersianDate(),
       notes: 'تست یکپارچگی داده‌های بالینی و ردیابی بلادرنگ',
       teethConditions: {
         'UR_6': {
@@ -524,7 +568,7 @@ class SupabaseService {
           treatment: 'composite',
           status: 'completed',
           cost: 2500000,
-          date: '۱۴۰۳/۰۸/۱۵'
+          date: getCurrentPersianDate()
         }
       },
       sayadChecks: [],
@@ -579,7 +623,7 @@ class SupabaseService {
       phone: '۰۹۱۲۳۴۵۶۷۸۹',
       unit: 'یونیت ۱ دندانپزشکی',
       doctor: 'دکتر مهدی امیری',
-      date: '۱۴۰۳/۰۸/۱۵',
+      date: getCurrentPersianDate(),
       time: '۱۷:۴۵',
       durationMinutes: 45,
       treatment: 'ترمیم کامپوزیت زیبایی',
@@ -628,7 +672,7 @@ class SupabaseService {
       sayadId: '۷۳۰۱۹۹۸۸۴۴۲۲۱۱۰۹',
       bankName: 'بانک پاسارگاد',
       amount: 15000000,
-      dueDate: '۱۴۰۳/۰۹/۱۵',
+      dueDate: getRelativePersianDate(30),
       drawerName: 'علی مرادی',
       status: 'in_collection',
       isGuarantee: true,
@@ -681,8 +725,8 @@ class SupabaseService {
       torque: 45,
       boneGraft: true,
       membrane: true,
-      surgeryDate: '۱۴۰۳/۰۸/۱۵',
-      healingDueDate: '۱۴۰۳/۱۱/۱۵',
+      surgeryDate: getCurrentPersianDate(),
+      healingDueDate: getRelativePersianDate(90),
       currentStage: 'fixture_placed',
       notes: 'تورک عالی ۴۵ نیوتن، همراه با پیوند استخوان آلوگرافت'
     };
@@ -730,9 +774,9 @@ class SupabaseService {
       workType: 'روکش تمام زیرکونیا مونوپلیتیک',
       labName: 'لابراتوار تخصصی آرتور',
       shade: 'BL2 سوپر وایت',
-      sendDate: '۱۴۰۳/۰۸/۱۵',
-      deliveryDate: '۱۴۰۳/۰۸/۲۲',
-      appointmentDate: '۱۴۰۳/۰۸/۲۳',
+      sendDate: getCurrentPersianDate(),
+      deliveryDate: getRelativePersianDate(7),
+      appointmentDate: getRelativePersianDate(8),
       status: 'fabrication',
       cost: 3200000,
       reminderNotice: 'روکش آماده تحویل در نوبت ۲۳ آبان'
@@ -780,7 +824,7 @@ class SupabaseService {
       stock: 45,
       unit: 'عدد',
       minAlert: 20,
-      expiryDate: '۱۴۰۴/۰۶/۳۰',
+      expiryDate: getRelativePersianDate(365),
       pricePerUnit: 14000
     };
 

@@ -38,8 +38,16 @@ export function parseFileNumber(val: string): ParsedFileNumber {
 /**
  * Increments the given file number by 1, preserving prefix/suffix
  */
-export function getNextFileNumber(currentOrLastVal: string): string {
-  const { prefix, num, suffix } = parseFileNumber(currentOrLastVal);
+export function getNextFileNumber(currentOrLastVal?: string): string {
+  let valToUse = currentOrLastVal;
+  if (!valToUse) {
+    try {
+      valToUse = localStorage.getItem('minadental_last_file_number') || 'D-1051';
+    } catch {
+      valToUse = 'D-1051';
+    }
+  }
+  const { prefix, num, suffix } = parseFileNumber(valToUse);
   const nextNum = num + 1;
   return `${prefix}${nextNum}${suffix}`;
 }

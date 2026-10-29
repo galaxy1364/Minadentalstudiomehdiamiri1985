@@ -1,12 +1,13 @@
 import React from 'react';
 import { 
-  Home, 
-  Users, 
-  Layers, 
-  FileCheck2, 
-  Calendar, 
-  LayoutGrid 
-} from 'lucide-react';
+  Logo3DHome, 
+  Logo3DPatients, 
+  Logo3DTreatments, 
+  Logo3DFinancial, 
+  Logo3DAppointments, 
+  Logo3DGridServices, 
+  Logo3DThumbZap 
+} from './ThreeDimensionalLogos';
 import { useHapticFeedback } from '../hooks/useHapticFeedback';
 
 export type NavTab = 'home' | 'patients' | 'treatments' | 'financial' | 'appointments';
@@ -15,12 +16,14 @@ interface BottomDockProps {
   activeTab: NavTab;
   onTabChange: (tab: NavTab) => void;
   onOpenServicesMenu: () => void;
+  onOpenThumbZone?: () => void;
 }
 
 export const BottomDock: React.FC<BottomDockProps> = ({
   activeTab,
   onTabChange,
-  onOpenServicesMenu
+  onOpenServicesMenu,
+  onOpenThumbZone
 }) => {
   const { selection, impactMedium } = useHapticFeedback();
 
@@ -30,96 +33,137 @@ export const BottomDock: React.FC<BottomDockProps> = ({
   };
 
   return (
-    <div className="fixed bottom-3 inset-x-0 z-40 flex justify-center px-4 pointer-events-none">
-      <div className="pointer-events-auto flex items-center gap-1.5 p-1.5 rounded-full bg-white/90 backdrop-blur-xl border border-slate-200/90 shadow-[0_12px_36px_rgba(0,0,0,0.12)] max-w-md w-full justify-between">
+    <nav 
+      aria-label="ناوبری اصلی داک مینادنتال"
+      className="fixed inset-x-0 z-50 flex justify-center px-1.5 sm:px-3 pointer-events-none"
+      style={{ bottom: 'max(0.55rem, env(safe-area-inset-bottom, 0.55rem))' }}
+    >
+      <div className="pointer-events-auto flex items-center justify-between gap-0.5 sm:gap-1.5 p-1 sm:p-1.5 rounded-[26px] sm:rounded-full bg-white/95 backdrop-blur-2xl border border-slate-200/90 shadow-[0_12px_36px_rgba(0,0,0,0.18)] max-w-lg w-full">
         
-        {/* Left side: Grid All Services Button */}
+        {/* Left side: Grid All Services Button with 3D Embossed Multi-Color Icon + Title Underneath */}
         <button
           onClick={() => {
             impactMedium();
             onOpenServicesMenu();
           }}
-          className="w-11 h-11 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-800 flex items-center justify-center transition-all active:scale-95 shrink-0 shadow-xs border border-slate-200 group"
-          title="منوی کلیه خدمات"
+          className="flex flex-col items-center justify-center py-1 px-1.5 min-w-[46px] sm:min-w-[54px] rounded-2xl hover:bg-purple-50/80 text-slate-600 hover:text-purple-700 transition-all active:translate-y-1 active:scale-90 shrink-0 group cursor-pointer"
+          title="منوی کلیه خدمات کلینیک"
           aria-label="کلیه خدمات کلینیک"
         >
-          <LayoutGrid className="w-5 h-5 group-hover:rotate-12 transition-transform text-slate-800" />
+          <Logo3DGridServices size={26} className="group-hover:rotate-12 group-hover:scale-110 transition-transform" />
+          <span className="text-[9.5px] sm:text-[10px] font-black text-slate-600 group-hover:text-purple-700 mt-0.5 leading-tight select-none">
+            خدمات
+          </span>
         </button>
 
-        {/* Navigation Tabs */}
-        <div className="flex items-center gap-1 flex-1 justify-around">
+        {/* Separator Line */}
+        <div className="h-7 w-[1px] bg-slate-200/80 shrink-0" />
+
+        {/* Navigation Tabs with 3D Embossed Multi-Color Logos + Names Underneath */}
+        <div className="flex items-center gap-0.5 sm:gap-1 flex-1 justify-around min-w-0">
+          
           {/* Dashboard Tab */}
           <button
             onClick={() => handleTab('home')}
-            className={`transition-all duration-200 active:scale-95 ${
+            className={`flex flex-col items-center justify-center py-1 px-1 sm:px-2 min-w-[48px] sm:min-w-[58px] rounded-2xl transition-all duration-200 active:translate-y-1 active:scale-95 cursor-pointer ${
               activeTab === 'home'
-                ? 'bg-emerald-600 text-white font-extrabold px-3 py-1.5 rounded-full flex items-center gap-1.5 shadow-md shadow-emerald-600/30'
-                : 'w-10 h-10 flex items-center justify-center text-slate-400 hover:text-slate-800 rounded-full'
+                ? 'bg-emerald-50 text-emerald-700 font-black shadow-xs border border-emerald-200/70 scale-102'
+                : 'text-slate-500 hover:text-slate-800 hover:bg-slate-50/80 font-bold'
             }`}
-            title="داشبورد"
+            title="داشبورد کلینیک"
           >
-            <Home className="w-4 h-4" />
-            {activeTab === 'home' && <span className="text-xs">داشبورد</span>}
+            <Logo3DHome size={26} className={activeTab === 'home' ? 'scale-110 drop-shadow-[0_4px_8px_rgba(16,185,129,0.4)]' : 'opacity-85 hover:opacity-100'} />
+            <span className={`text-[9.5px] sm:text-[10px] mt-0.5 leading-tight select-none ${activeTab === 'home' ? 'text-emerald-800 font-black' : 'text-slate-600'}`}>
+              داشبورد
+            </span>
           </button>
 
           {/* Patients Tab */}
           <button
             onClick={() => handleTab('patients')}
-            className={`transition-all duration-200 active:scale-95 ${
+            className={`flex flex-col items-center justify-center py-1 px-1 sm:px-2 min-w-[48px] sm:min-w-[58px] rounded-2xl transition-all duration-200 active:translate-y-1 active:scale-95 cursor-pointer ${
               activeTab === 'patients'
-                ? 'bg-sky-600 text-white font-extrabold px-3 py-1.5 rounded-full flex items-center gap-1.5 shadow-md shadow-sky-600/30'
-                : 'w-10 h-10 flex items-center justify-center text-slate-400 hover:text-slate-800 rounded-full'
+                ? 'bg-sky-50 text-sky-700 font-black shadow-xs border border-sky-200/70 scale-102'
+                : 'text-slate-500 hover:text-slate-800 hover:bg-slate-50/80 font-bold'
             }`}
             title="پرونده بیماران"
           >
-            <Users className="w-4 h-4" />
-            {activeTab === 'patients' && <span className="text-xs">بیماران</span>}
+            <Logo3DPatients size={26} className={activeTab === 'patients' ? 'scale-110 drop-shadow-[0_4px_8px_rgba(2,132,199,0.4)]' : 'opacity-85 hover:opacity-100'} />
+            <span className={`text-[9.5px] sm:text-[10px] mt-0.5 leading-tight select-none ${activeTab === 'patients' ? 'text-sky-800 font-black' : 'text-slate-600'}`}>
+              بیماران
+            </span>
           </button>
 
           {/* Treatments / Palmer Chart Tab */}
           <button
             onClick={() => handleTab('treatments')}
-            className={`transition-all duration-200 active:scale-95 ${
+            className={`flex flex-col items-center justify-center py-1 px-1 sm:px-2 min-w-[48px] sm:min-w-[58px] rounded-2xl transition-all duration-200 active:translate-y-1 active:scale-95 cursor-pointer ${
               activeTab === 'treatments'
-                ? 'bg-teal-600 text-white font-extrabold px-3 py-1.5 rounded-full flex items-center gap-1.5 shadow-md shadow-teal-600/30'
-                : 'w-10 h-10 flex items-center justify-center text-slate-400 hover:text-slate-800 rounded-full'
+                ? 'bg-teal-50 text-teal-700 font-black shadow-xs border border-teal-200/70 scale-102'
+                : 'text-slate-500 hover:text-slate-800 hover:bg-slate-50/80 font-bold'
             }`}
-            title="درمان و چارت"
+            title="درمان و چارت پالمر"
           >
-            <Layers className="w-4 h-4" />
-            {activeTab === 'treatments' && <span className="text-xs">درمان</span>}
+            <Logo3DTreatments size={26} className={activeTab === 'treatments' ? 'scale-110 drop-shadow-[0_4px_8px_rgba(20,184,166,0.4)]' : 'opacity-85 hover:opacity-100'} />
+            <span className={`text-[9.5px] sm:text-[10px] mt-0.5 leading-tight select-none ${activeTab === 'treatments' ? 'text-teal-800 font-black' : 'text-slate-600'}`}>
+              درمان
+            </span>
           </button>
 
           {/* Financial / Checks Tab */}
           <button
             onClick={() => handleTab('financial')}
-            className={`transition-all duration-200 active:scale-95 ${
+            className={`flex flex-col items-center justify-center py-1 px-1 sm:px-2 min-w-[48px] sm:min-w-[58px] rounded-2xl transition-all duration-200 active:translate-y-1 active:scale-95 cursor-pointer ${
               activeTab === 'financial'
-                ? 'bg-amber-600 text-white font-extrabold px-3 py-1.5 rounded-full flex items-center gap-1.5 shadow-md shadow-amber-600/30'
-                : 'w-10 h-10 flex items-center justify-center text-slate-400 hover:text-slate-800 rounded-full'
+                ? 'bg-amber-50 text-amber-700 font-black shadow-xs border border-amber-200/70 scale-102'
+                : 'text-slate-500 hover:text-slate-800 hover:bg-slate-50/80 font-bold'
             }`}
-            title="مالی و چک"
+            title="امور مالی و چک صیادی"
           >
-            <FileCheck2 className="w-4 h-4" />
-            {activeTab === 'financial' && <span className="text-xs">مالی</span>}
+            <Logo3DFinancial size={26} className={activeTab === 'financial' ? 'scale-110 drop-shadow-[0_4px_8px_rgba(217,119,6,0.4)]' : 'opacity-85 hover:opacity-100'} />
+            <span className={`text-[9.5px] sm:text-[10px] mt-0.5 leading-tight select-none ${activeTab === 'financial' ? 'text-amber-800 font-black' : 'text-slate-600'}`}>
+              مالی
+            </span>
           </button>
 
           {/* Appointments / Calendar Tab */}
           <button
             onClick={() => handleTab('appointments')}
-            className={`transition-all duration-200 active:scale-95 ${
+            className={`flex flex-col items-center justify-center py-1 px-1 sm:px-2 min-w-[48px] sm:min-w-[58px] rounded-2xl transition-all duration-200 active:translate-y-1 active:scale-95 cursor-pointer ${
               activeTab === 'appointments'
-                ? 'bg-blue-600 text-white font-extrabold px-3 py-1.5 rounded-full flex items-center gap-1.5 shadow-md shadow-blue-600/30'
-                : 'w-10 h-10 flex items-center justify-center text-slate-400 hover:text-slate-800 rounded-full'
+                ? 'bg-blue-50 text-blue-700 font-black shadow-xs border border-blue-200/70 scale-102'
+                : 'text-slate-500 hover:text-slate-800 hover:bg-slate-50/80 font-bold'
             }`}
-            title="نوبت‌دهی تقویم"
+            title="نوبت‌دهی و تقویم ایرانی"
           >
-            <Calendar className="w-4 h-4" />
-            {activeTab === 'appointments' && <span className="text-xs">نوبت‌ها</span>}
+            <Logo3DAppointments size={26} className={activeTab === 'appointments' ? 'scale-110 drop-shadow-[0_4px_8px_rgba(37,99,235,0.4)]' : 'opacity-85 hover:opacity-100'} />
+            <span className={`text-[9.5px] sm:text-[10px] mt-0.5 leading-tight select-none ${activeTab === 'appointments' ? 'text-blue-800 font-black' : 'text-slate-600'}`}>
+              نوبت‌ها
+            </span>
           </button>
         </div>
 
+        {/* Separator Line */}
+        {onOpenThumbZone && <div className="h-7 w-[1px] bg-slate-200/80 shrink-0" />}
+
+        {/* Right side: Thumb Zone Quick Actions Trigger with 3D Embossed Electric Zap + Name Underneath */}
+        {onOpenThumbZone && (
+          <button
+            onClick={() => {
+              impactMedium();
+              onOpenThumbZone();
+            }}
+            className="flex flex-col items-center justify-center py-1 px-1.5 min-w-[46px] sm:min-w-[54px] rounded-2xl hover:bg-[#c8ff00]/15 text-slate-600 hover:text-lime-700 transition-all active:translate-y-1 active:scale-90 shrink-0 group cursor-pointer"
+            title="فرمان‌های سریع با یک دست (Thumb Zone)"
+            aria-label="فرمان‌های سریع با یک دست"
+          >
+            <Logo3DThumbZap size={26} className="group-hover:scale-115 transition-transform" />
+            <span className="text-[9.5px] sm:text-[10px] font-black text-slate-600 group-hover:text-lime-800 mt-0.5 leading-tight select-none">
+              سریع
+            </span>
+          </button>
+        )}
       </div>
-    </div>
+    </nav>
   );
 };

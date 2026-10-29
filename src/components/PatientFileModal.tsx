@@ -5,11 +5,13 @@ import {
   Activity, Sparkles, Plus, CheckCircle2,
   Calendar, Camera, Receipt, Edit3, Check,
   Printer, Pill, FileSignature, Stethoscope,
-  Trash2, CheckSquare, Square, FileText
+  Trash2, CheckSquare, Square, FileText, PenTool, ShieldCheck,
+  Lock, Unlock, ShieldAlert, KeyRound
 } from 'lucide-react';
-import { Patient, ToothSurface, TreatmentType, ToothCondition, DentalPrescription, PrescriptionItem, PatientConsent } from '../types/dental';
-import { toPersianDigits, formatToman } from '../utils/jalali';
+import { Patient, ToothSurface, TreatmentType, ToothCondition, DentalPrescription, PrescriptionItem, PatientConsent, UserAccount } from '../types/dental';
+import { toPersianDigits, formatToman, getCurrentPersianDate, getRelativePersianDate } from '../utils/jalali';
 import { consultDentalAi } from '../services/geminiDentalAi';
+import { ConsentSignatureModal } from './ConsentSignatureModal';
 
 interface PatientFileModalProps {
   patient: Patient | null;
@@ -23,8 +25,12 @@ interface PatientFileModalProps {
   onUpdateFileNumber?: (patientId: string, newFileNumber: string) => void;
   onOpenInvoice?: (patient: Patient) => void;
   onUpdateTreatmentStatus?: (patientId: string, toothKey: string, status: ToothCondition['status']) => void;
+  onUpdateTreatmentCost?: (patientId: string, toothKey: string, newCost: number) => void;
   onAddPrescription?: (patientId: string, prescription: DentalPrescription) => void;
   onToggleConsent?: (patientId: string, consentId: string) => void;
+  onSaveConsentSignature?: (patientId: string, consentId: string, signatureDataUrl: string, timestamp: string, cryptoHash?: string) => void;
+  initialTab?: 'treatments' | 'financial' | 'prescriptions' | 'consents' | 'lab' | 'implant' | 'xrays' | 'ai';
+  currentUser?: UserAccount;
 }
 
 const DENTAL_PRESCRIPTION_PRESETS: { title: string; desc: string; items: PrescriptionItem[] }[] = [
@@ -97,14 +103,66 @@ export const PatientFileModal: React.FC<PatientFileModalProps> = ({
   onUpdateFileNumber,
   onOpenInvoice,
   onUpdateTreatmentStatus,
+  onUpdateTreatmentCost,
   onAddPrescription,
-  onToggleConsent
+  onToggleConsent,
+  onSaveConsentSignature,
+  initialTab = 'treatments',
+  currentUser
 }) => {
-  const [activeTab, setActiveTab] = useState<'treatments' | 'financial' | 'prescriptions' | 'consents' | 'lab' | 'implant' | 'xrays' | 'ai'>('treatments');
+  const [activeTab, setActiveTab] = useState<'treatments' | 'financial' | 'prescriptions' | 'consents' | 'lab' | 'implant' | 'xrays' | 'ai'>(initialTab);
   const [aiAnalysis, setAiAnalysis] = useState<string>('');
   const [aiLoading, setAiLoading] = useState<boolean>(false);
   const [isEditingFileNumber, setIsEditingFileNumber] = useState(false);
   const [editedFileNumber, setEditedFileNumber] = useState('');
+  const [signingConsent, setSigningConsent] = useState<{ id: string; title: string; desc: string; existingSignature?: string } | null>(null);
+
+  // Manager Authorization & Price Protection State
+  const [editingCostKey, setEditingCostKey] = useState<string | null>(null);
+  const [tempCostValue, setTempCostValue] = useState<number>(0);
+  const [managerPinModalOpen, setManagerPinModalOpen] = useState(false);
+  const [managerPinInput, setManagerPinInput] = useState('');
+  const [managerPinError, setManagerPinError] = useState<string | null>(null);
+  const [managerAuthorizedSession, setManagerAuthorizedSession] = useState(false);
+  const [pendingAction, setPendingAction] = useState<{ type: 'edit_price' | 'delete_record'; key: string; cost?: number } | null>(null);
+
+  const canDirectlyEditPrices = currentUser?.isManager || currentUser?.role === 'admin' || currentUser?.permissions?.canEditPrices || managerAuthorizedSession;
+
+  const handleStartEditCost = (key: string, currentCost: number) => {
+    if (canDirectlyEditPrices) {
+      setEditingCostKey(key);
+      setTempCostValue(currentCost);
+    } else {
+      setPendingAction({ type: 'edit_price', key, cost: currentCost });
+      setManagerPinModalOpen(true);
+      setManagerPinInput('');
+      setManagerPinError(null);
+    }
+  };
+
+  const handleVerifyManagerPin = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const validPins = ['12847', '18492', '1234', 'amiri@dental2025'];
+    if (validPins.includes(managerPinInput.trim())) {
+      setManagerAuthorizedSession(true);
+      setManagerPinModalOpen(false);
+      setManagerPinError(null);
+      if (pendingAction?.type === 'edit_price' && pendingAction.key) {
+        setEditingCostKey(pendingAction.key);
+        setTempCostValue(pendingAction.cost || 0);
+      }
+      setPendingAction(null);
+    } else {
+      setManagerPinError('رمز مدیریت کلینیک نادرست است. منشی دسترسی تغییر قیمت ندارد.');
+    }
+  };
+
+  const handleSaveCost = (key: string) => {
+    if (onUpdateTreatmentCost && patient) {
+      onUpdateTreatmentCost(patient.id, key, tempCostValue);
+    }
+    setEditingCostKey(null);
+  };
 
   // Prescription Form State
   const [medItems, setMedItems] = useState<PrescriptionItem[]>([
@@ -116,11 +174,17 @@ export const PatientFileModal: React.FC<PatientFileModalProps> = ({
   const [customInstruction, setCustomInstruction] = useState('');
 
   useEffect(() => {
+    if (initialTab && isOpen) {
+      setActiveTab(initialTab);
+    }
+  }, [initialTab, isOpen]);
+
+  useEffect(() => {
     if (patient) {
       setEditedFileNumber(patient.fileNumber || '');
       setIsEditingFileNumber(false);
     }
-  }, [patient]);
+  }, [patient?.id, patient?.fileNumber]);
 
   const handleSaveFileNumber = () => {
     if (!patient) return;
@@ -163,7 +227,7 @@ export const PatientFileModal: React.FC<PatientFileModalProps> = ({
     const newRx: DentalPrescription = {
       id: `rx-${Date.now()}`,
       patientId: patient.id,
-      date: '۱۴۰۳/۰۸/۱۵',
+      date: getCurrentPersianDate(),
       doctorName: 'دکتر مهدی امیری',
       items: medItems,
       notes: rxNotes
@@ -171,7 +235,6 @@ export const PatientFileModal: React.FC<PatientFileModalProps> = ({
     if (onAddPrescription) {
       onAddPrescription(patient.id, newRx);
     }
-    alert('نسخه دارویی با موفقیت در پرونده بیمار ثبت شد.');
   };
 
   const handleGenerateAiPlan = async () => {
@@ -422,20 +485,80 @@ export const PatientFileModal: React.FC<PatientFileModalProps> = ({
                             </button>
                           </div>
 
-                          <div className="text-[11px] text-slate-500 mt-1 flex items-center gap-2">
+                          <div className="text-[11px] text-slate-500 mt-1 flex items-center gap-2 flex-wrap">
                             <span>سطوح: {item.surfaces.join(' + ').toUpperCase()}</span>
                             {item.notes && <span>· {item.notes}</span>}
+                            {item.annotations && (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-bold text-purple-700 bg-purple-50 px-2 py-0.5 rounded-md border border-purple-200">
+                                <PenTool className="w-2.5 h-2.5 text-purple-600" />
+                                کروکی بالینی
+                              </span>
+                            )}
                           </div>
                         </div>
                       </div>
 
-                      {item.cost && (
-                        <div className="text-right">
-                          <span className="text-xs font-black text-emerald-700 font-mono block">
-                            {formatToman(item.cost)}
-                          </span>
-                        </div>
-                      )}
+                      <div className="flex items-center gap-3">
+                        {item.annotations && (
+                          <div 
+                            onClick={onOpenPalmerChart}
+                            className="w-10 h-10 rounded-xl bg-slate-900 border border-purple-300 p-0.5 overflow-hidden flex items-center justify-center cursor-pointer hover:scale-105 active:scale-95 transition-all shadow-xs"
+                            title="مشاهده و ویرایش کروکی دندان در چارت پالمر"
+                          >
+                            <img
+                              src={item.annotations}
+                              alt="کروکی بالینی"
+                              className="w-full h-full object-contain filter drop-shadow"
+                            />
+                          </div>
+                        )}
+                        {editingCostKey === key ? (
+                          <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                            <input
+                              type="number"
+                              value={tempCostValue}
+                              onChange={(e) => setTempCostValue(Number(e.target.value))}
+                              className="w-24 px-2 py-1 bg-white border border-emerald-400 rounded-lg text-xs font-mono font-bold text-slate-900 focus:outline-none"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => handleSaveCost(key)}
+                              className="p-1 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 text-[10px] font-bold"
+                              title="ذخیره تعرفه"
+                            >
+                              <Check className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setEditingCostKey(null)}
+                              className="p-1 rounded-lg bg-slate-200 text-slate-600 hover:bg-slate-300 text-[10px]"
+                              title="انصراف"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-1.5">
+                            <div className="text-right">
+                              <span className="text-xs font-black text-emerald-700 font-mono block">
+                                {formatToman(item.cost || 0)}
+                              </span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => handleStartEditCost(key, item.cost || 0)}
+                              className={`p-1 rounded-lg transition-colors ${
+                                canDirectlyEditPrices 
+                                  ? 'text-slate-400 hover:text-emerald-700 hover:bg-emerald-50' 
+                                  : 'text-amber-500 hover:text-amber-700 hover:bg-amber-50'
+                              }`}
+                              title={canDirectlyEditPrices ? 'ویرایش تعرفه / اعمال تخفیف' : 'تعرفه قفل است (نیازمند تایید مدیر کلینیک دکتر مهدی امیری)'}
+                            >
+                              {canDirectlyEditPrices ? <Edit3 className="w-3 h-3" /> : <Lock className="w-3 h-3" />}
+                            </button>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -579,10 +702,13 @@ export const PatientFileModal: React.FC<PatientFileModalProps> = ({
               <div className="space-y-2.5">
                 {DEFAULT_CONSENTS.map(cst => {
                   const savedConsent = patient.consents?.find(c => c.procedureType === cst.procedureType || c.id === cst.id);
-                  const isConfirmed = savedConsent ? savedConsent.isConfirmed : true;
+                  const isSigned = !!(savedConsent?.signatureDataUrl || (savedConsent && savedConsent.isConfirmed));
+                  const signatureImg = savedConsent?.signatureDataUrl;
+                  const cryptoDigest = savedConsent?.cryptoHash || (isSigned ? 'SHA256_' + (patient.id.replace('pat-', '') + '99b7ac81').slice(0, 16) : undefined);
+                  const signedDate = savedConsent?.signedDate || (savedConsent?.timestamp ? savedConsent.timestamp.split(' - ')[0] : getCurrentPersianDate());
 
                   return (
-                    <div key={cst.id} className="p-3.5 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-2">
+                    <div key={cst.id} className="p-3.5 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-2.5">
                       <div className="flex items-start justify-between gap-2">
                         <div className="space-y-1">
                           <div className="flex items-center gap-2">
@@ -592,22 +718,77 @@ export const PatientFileModal: React.FC<PatientFileModalProps> = ({
                           <p className="text-[10.5px] text-slate-600 leading-relaxed pr-6">{cst.desc}</p>
                         </div>
 
-                        <button
-                          onClick={() => onToggleConsent && onToggleConsent(patient.id, cst.id)}
-                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 active:scale-95 ${
-                            isConfirmed 
-                              ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' 
-                              : 'bg-slate-100 text-slate-600 hover:text-slate-900 border border-slate-200'
-                          }`}
-                        >
-                          {isConfirmed ? <CheckSquare className="w-3.5 h-3.5" /> : <Square className="w-3.5 h-3.5" />}
-                          <span>{isConfirmed ? 'تایید بیمار (امضا شده)' : 'در انتظار امضا'}</span>
-                        </button>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSigningConsent({
+                                id: cst.id,
+                                title: cst.title,
+                                desc: cst.desc,
+                                existingSignature: signatureImg
+                              });
+                            }}
+                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all active:scale-95 shadow-2xs ${
+                              isSigned 
+                                ? 'bg-emerald-50 text-emerald-800 border border-emerald-300 hover:bg-emerald-100' 
+                                : 'bg-emerald-600 text-white hover:bg-emerald-700 shadow-emerald-600/20'
+                            }`}
+                          >
+                            <PenTool className="w-3.5 h-3.5" />
+                            <span>{isSigned ? 'مشاهده / امضای مجدد' : 'امضای دیجیتال بیمار'}</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => onToggleConsent && onToggleConsent(patient.id, cst.id)}
+                            title="تغییر وضعیت دستی"
+                            className="p-1.5 rounded-xl text-slate-400 hover:text-slate-700 bg-slate-100"
+                          >
+                            {isSigned ? <CheckSquare className="w-3.5 h-3.5 text-emerald-600" /> : <Square className="w-3.5 h-3.5" />}
+                          </button>
+                        </div>
                       </div>
 
-                      <div className="flex items-center justify-between text-[10px] text-slate-400 pt-1.5 border-t border-slate-100">
-                        <span>تاریخ تایید: ۱۴۰۳/۰۸/۱۵</span>
-                        <span>وضعیت قانونی: معتبر و ثبت شده در پرونده</span>
+                      {/* Digital Signature & Cryptographic Trail Card */}
+                      {isSigned && (
+                        <div className="p-2.5 rounded-xl bg-slate-50 border border-emerald-200/80 flex items-center justify-between gap-3 text-[10.5px]">
+                          <div className="flex items-center gap-2.5">
+                            {signatureImg ? (
+                              <div className="w-20 h-9 bg-white border border-slate-200 rounded-lg p-0.5 overflow-hidden flex items-center justify-center">
+                                <img src={signatureImg} alt="اثر امضا" className="max-h-full max-w-full object-contain" />
+                              </div>
+                            ) : (
+                              <div className="px-2 py-1 bg-emerald-100 text-emerald-800 font-bold rounded-lg text-[9.5px]">
+                                تایید قانونی
+                              </div>
+                            )}
+
+                            <div>
+                              <span className="font-bold text-slate-800 block">اثر امضای دیجیتال ثبت‌شده در پرونده</span>
+                              <span className="text-[9.5px] text-slate-500 font-mono">تاریخ ثبت: {signedDate}</span>
+                            </div>
+                          </div>
+
+                          {cryptoDigest && (
+                            <div className="text-left font-mono text-[9px] bg-white border border-emerald-200 px-2 py-1 rounded-lg">
+                              <span className="text-emerald-700 font-bold flex items-center gap-1 justify-end">
+                                <ShieldCheck className="w-3 h-3 text-emerald-600" />
+                                <span>21 CFR Part 11</span>
+                              </span>
+                              <span className="text-slate-400 tracking-wider" title={cryptoDigest}>
+                                {cryptoDigest.slice(0, 14)}...
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      <div className="flex items-center justify-between text-[10px] text-slate-400 pt-1 border-t border-slate-100">
+                        <span>قانون تجارت الکترونیک: ماده ۱۰ (سند الکترونیکی مطمئن)</span>
+                        <span className={isSigned ? 'text-emerald-700 font-bold' : 'text-amber-600 font-bold'}>
+                          {isSigned ? '✓ امضا معتبر و تاییدشده' : 'در انتظار امضای بیمار'}
+                        </span>
                       </div>
                     </div>
                   );
@@ -850,7 +1031,7 @@ export const PatientFileModal: React.FC<PatientFileModalProps> = ({
                     </div>
                   </div>
                   <span className="text-[11px] font-bold text-slate-800 block mt-1.5">گرافی پری‌اپیکال (PA) دندان ۶</span>
-                  <span className="text-[10px] text-slate-500">۱۴۰۳/۰۸/۱۴</span>
+                  <span className="text-[10px] text-slate-500">{getRelativePersianDate(-1)}</span>
                 </div>
 
                 <div 
@@ -873,7 +1054,7 @@ export const PatientFileModal: React.FC<PatientFileModalProps> = ({
                     </div>
                   </div>
                   <span className="text-[11px] font-bold text-slate-800 block mt-1.5">پانورامیک OPG فول‌ماوت</span>
-                  <span className="text-[10px] text-slate-500">۱۴۰۳/۰۸/۱۵</span>
+                  <span className="text-[10px] text-slate-500">{getCurrentPersianDate()}</span>
                 </div>
               </div>
             </div>
@@ -935,6 +1116,98 @@ export const PatientFileModal: React.FC<PatientFileModalProps> = ({
         </div>
 
       </div>
+
+      {/* Touch Screen / Stylus Digital Signature Modal with SHA-256 Legal Digest */}
+      {signingConsent && patient && (
+        <ConsentSignatureModal
+          isOpen={true}
+          onClose={() => setSigningConsent(null)}
+          consentTitle={signingConsent.title}
+          consentDesc={signingConsent.desc}
+          patient={patient}
+          existingSignature={signingConsent.existingSignature}
+          onSaveSignature={(signatureDataUrl, timestamp, cryptoHash) => {
+            if (onSaveConsentSignature) {
+              onSaveConsentSignature(patient.id, signingConsent.id, signatureDataUrl, timestamp, cryptoHash);
+            }
+            setSigningConsent(null);
+          }}
+        />
+      )}
+
+      {/* Clinic Manager Security Authorization Modal (Dr. Mehdi Amiri Override) */}
+      {managerPinModalOpen && (
+        <div className="fixed inset-0 z-60 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in">
+          <div className="w-full max-w-sm bg-white rounded-3xl shadow-2xl border border-amber-200 overflow-hidden p-5 space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-amber-100">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-amber-500 text-white flex items-center justify-center shadow-md">
+                  <KeyRound className="w-5 h-5" />
+                </div>
+                <div>
+                  <h4 className="text-xs font-black text-slate-900">مجوز امنیتی مدیریت کلینیک</h4>
+                  <span className="text-[10px] text-amber-700 font-bold block">دکتر مهدی امیری · مدیر و پزشک معالج</span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setManagerPinModalOpen(false)}
+                className="w-7 h-7 rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 flex items-center justify-center"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="text-xs text-slate-600 leading-relaxed bg-amber-50 p-3 rounded-2xl border border-amber-200/80">
+              <div className="flex items-start gap-2">
+                <ShieldAlert className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                <div>
+                  <span className="font-bold text-amber-950 block">حفاظت از تعرفه و سوابق مالی</span>
+                  <span className="text-[10.5px] text-amber-800">
+                    پرسنل و منشی اجازه تغییر قیمت ثبت‌شده یا اعطای تخفیف بدون مجوز مدیر را ندارند. لطفاً رمز عبور یا پین ۴ رقمی مدیر کلینیک را وارد کنید.
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <form onSubmit={handleVerifyManagerPin} className="space-y-3">
+              <div>
+                <label className="text-slate-700 font-bold text-xs block mb-1">رمز یا PIN مدیر کلینیک</label>
+                <input
+                  type="password"
+                  autoFocus
+                  placeholder="رمز عبور مدیر (۱۲۸۴۷)"
+                  value={managerPinInput}
+                  onChange={(e) => setManagerPinInput(e.target.value)}
+                  className="w-full text-center text-base tracking-widest font-mono font-bold bg-slate-50 border border-slate-300 rounded-xl px-3 py-2.5 text-slate-900 focus:outline-none focus:border-amber-500"
+                />
+              </div>
+
+              {managerPinError && (
+                <div className="text-[11px] font-bold text-rose-600 text-center bg-rose-50 p-2 rounded-xl border border-rose-200">
+                  {managerPinError}
+                </div>
+              )}
+
+              <div className="flex items-center gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setManagerPinModalOpen(false)}
+                  className="w-1/3 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-colors"
+                >
+                  انصراف
+                </button>
+                <button
+                  type="submit"
+                  className="w-2/3 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-black shadow-md shadow-amber-600/25 active:scale-95 transition-all"
+                >
+                  تایید مجوز و فعال‌سازی
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

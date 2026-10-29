@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { X, FlaskConical } from 'lucide-react';
 import { Patient, LabOrder } from '../types/dental';
-import { formatToman } from '../utils/jalali';
+import { formatToman, getCurrentPersianDate, getPersianDateParts } from '../utils/jalali';
 
 interface AddLabOrderModalProps {
   isOpen: boolean;
@@ -21,9 +21,9 @@ export const AddLabOrderModal: React.FC<AddLabOrderModalProps> = ({
   const [toothNumber, setToothNumber] = useState('دندان ۶ بالا راست (UR6)');
   const [labName, setLabName] = useState('لابراتوار دیجیتال پیشرو');
   const [shade, setShade] = useState('A2');
-  const [sendDate, setSendDate] = useState('۱۴۰۳/۰۸/۱۵');
-  const [deliveryDate, setDeliveryDate] = useState('۱۴۰۳/۰۸/۲۲');
-  const [appointmentDate, setAppointmentDate] = useState('۱۴۰۳/۰۸/۲۳');
+  const [sendDate, setSendDate] = useState(() => getCurrentPersianDate());
+  const [deliveryDate, setDeliveryDate] = useState(() => getPersianDateParts(new Date(Date.now() + 7 * 86400000)).formatted);
+  const [appointmentDate, setAppointmentDate] = useState(() => getPersianDateParts(new Date(Date.now() + 8 * 86400000)).formatted);
   const [cost, setCost] = useState(2500000);
 
   if (!isOpen) return null;

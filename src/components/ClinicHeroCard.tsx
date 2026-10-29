@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { 
   Eye, EyeOff, Calendar, Layers, UserPlus, 
-  ChevronDown, Database, Stethoscope, ChevronLeft
+  ChevronDown, Database, Stethoscope, ChevronLeft, ShieldCheck
 } from 'lucide-react';
 import { toPersianDigits, formatToman } from '../utils/jalali';
 import { useHapticFeedback } from '../hooks/useHapticFeedback';
@@ -13,6 +13,7 @@ interface ClinicHeroCardProps {
   onOpenFinancial?: () => void;
   onOpenSupabaseTest?: () => void;
   onOpenShiftSettings: () => void;
+  onOpenPhaseAudit?: () => void;
   todayAppointmentsCount?: number;
   activeSurgeriesCount?: number;
   readyLabOrdersCount?: number;
@@ -26,6 +27,7 @@ export const ClinicHeroCard: React.FC<ClinicHeroCardProps> = ({
   onOpenFinancial,
   onOpenSupabaseTest,
   onOpenShiftSettings,
+  onOpenPhaseAudit,
   todayAppointmentsCount = 12,
   activeSurgeriesCount = 4,
   readyLabOrdersCount = 3,
@@ -61,34 +63,49 @@ export const ClinicHeroCard: React.FC<ClinicHeroCardProps> = ({
         <div className="absolute -top-10 -right-10 w-36 h-36 bg-emerald-400/10 rounded-full blur-2xl pointer-events-none" />
 
         {/* Top Header: Doctor Unit info & Cloud Supabase Status */}
-        <div className="relative z-10 flex items-center justify-between pb-2 border-b border-slate-200/80">
+        <div className="relative z-10 flex items-center justify-between gap-1 pb-2 border-b border-slate-200/80">
           {/* Right: Unit & Doctor Name */}
-          <div className="flex items-center gap-1.5">
-            <span className="relative flex h-2.5 w-2.5">
+          <div className="flex items-center gap-1.5 min-w-0">
+            <span className="relative flex h-2 w-2 shrink-0">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-500 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-600"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-600"></span>
             </span>
-            <span className="text-[11.5px] font-black text-slate-900 tracking-tight">
-              دکتر مهدی امیری · یونیت فعال
-            </span>
-            <span className="text-[9.5px] font-bold text-emerald-700 bg-emerald-100/70 px-1.5 py-0.2 rounded-md hidden xs:inline">
-              شیفت آنلاین
+            <span className="text-[11px] sm:text-xs font-black text-slate-900 tracking-tight truncate">
+              دکتر امیری · یونیت فعال
             </span>
           </div>
 
-          {/* Left: Supabase Cloud Status & Test Button */}
-          <button
-            onClick={() => {
-              impactLight();
-              onOpenSupabaseTest?.();
-            }}
-            className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-100/80 border border-emerald-300 text-[9.5px] font-bold text-emerald-800 hover:bg-emerald-200/80 active:scale-95 transition-all shadow-2xs"
-            title="آزمایشگاه تست زنده پایگاه‌داده سوپابیس"
-          >
-            <Database className="w-3 h-3 text-emerald-700" />
-            <span>سوپابیس ابری</span>
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse" />
-          </button>
+          {/* Left: Global Standards Suite & Supabase Cloud Status */}
+          <div className="flex items-center gap-1 shrink-0">
+            {onOpenPhaseAudit && (
+              <button
+                type="button"
+                onClick={() => {
+                  impactLight();
+                  onOpenPhaseAudit();
+                }}
+                className="flex items-center gap-1 px-1.5 sm:px-2 py-0.5 rounded-full bg-purple-100/90 border border-purple-300 text-[9px] sm:text-[9.5px] font-black text-purple-900 hover:bg-purple-200 active:scale-95 transition-all shadow-2xs cursor-pointer shrink-0"
+                title="مرکز آزمون استانداردهای جهانی دندانپزشکی"
+              >
+                <ShieldCheck className="w-3 h-3 text-purple-700 stroke-[2.5]" />
+                <span className="hidden xs:inline">استاندارد جهانی</span>
+                <span className="xs:hidden">تست</span>
+              </button>
+            )}
+
+            <button
+              onClick={() => {
+                impactLight();
+                onOpenSupabaseTest?.();
+              }}
+              className="flex items-center gap-1 px-1.5 sm:px-2 py-0.5 rounded-full bg-emerald-100/80 border border-emerald-300 text-[9px] sm:text-[9.5px] font-bold text-emerald-800 hover:bg-emerald-200/80 active:scale-95 transition-all shadow-2xs shrink-0"
+              title="آزمایشگاه تست زنده پایگاه‌داده سوپابیس"
+            >
+              <Database className="w-3 h-3 text-emerald-700" />
+              <span className="hidden xs:inline">سوپابیس</span>
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse" />
+            </button>
+          </div>
         </div>
 
         {/* Middle Row: Revenue & Live Metric Counters */}

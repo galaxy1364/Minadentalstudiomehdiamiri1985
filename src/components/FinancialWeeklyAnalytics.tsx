@@ -8,7 +8,7 @@ import {
   BarChart3, LineChart, Calendar, ArrowUpRight, Sparkles 
 } from 'lucide-react';
 import { Patient } from '../types/dental';
-import { toPersianDigits, formatToman } from '../utils/jalali';
+import { toPersianDigits, formatToman, getPersianDateParts } from '../utils/jalali';
 import { triggerHaptic } from '../utils/haptics';
 
 interface FinancialWeeklyAnalyticsProps {
@@ -29,72 +29,36 @@ export const FinancialWeeklyAnalytics: React.FC<FinancialWeeklyAnalyticsProps> =
   const [chartType, setChartType] = useState<'bar' | 'composed'>('bar');
   const [activeMetric, setActiveMetric] = useState<'all' | 'successful' | 'outstanding'>('all');
 
-  // Realistic weekly breakdown tailored to dental clinic workflow
-  const weeklyData: DailyMetric[] = [
-    {
-      day: 'شنبه',
-      shortDay: 'ش',
-      date: '۱۴۰۳/۰۸/۱۰',
-      revenue: 28500000,
-      successfulPayments: 24000000,
-      outstandingBalance: 4500000,
-      collectionRate: 84.2
-    },
-    {
-      day: 'یکشنبه',
-      shortDay: 'ی',
-      date: '۱۴۰۳/۰۸/۱۱',
-      revenue: 34000000,
-      successfulPayments: 29500000,
-      outstandingBalance: 4500000,
-      collectionRate: 86.7
-    },
-    {
-      day: 'دوشنبه',
-      shortDay: 'د',
-      date: '۱۴۰۳/۰۸/۱۲',
-      revenue: 41200000,
-      successfulPayments: 36000000,
-      outstandingBalance: 5200000,
-      collectionRate: 87.3
-    },
-    {
-      day: 'سه‌شنبه',
-      shortDay: 'س',
-      date: '۱۴۰۳/۰۸/۱۳',
-      revenue: 38500000,
-      successfulPayments: 31000000,
-      outstandingBalance: 7500000,
-      collectionRate: 80.5
-    },
-    {
-      day: 'چهارشنبه',
-      shortDay: 'چ',
-      date: '۱۴۰۳/۰۸/۱۴',
-      revenue: 32000000,
-      successfulPayments: 28000000,
-      outstandingBalance: 4000000,
-      collectionRate: 87.5
-    },
-    {
-      day: 'پنج‌شنبه',
-      shortDay: 'پ',
-      date: '۱۴۰۳/۰۸/۱۵',
-      revenue: 26500000,
-      successfulPayments: 22800000,
-      outstandingBalance: 3700000,
-      collectionRate: 86.0
-    },
-    {
-      day: 'جمعه',
-      shortDay: 'ج',
-      date: '۱۴۰۳/۰۸/۱۶',
-      revenue: 8500000,
-      successfulPayments: 7500000,
-      outstandingBalance: 1000000,
-      collectionRate: 88.2
-    }
-  ];
+  // Realistic weekly breakdown tailored to dental clinic workflow (computed dynamically for current week)
+  const weeklyData: DailyMetric[] = React.useMemo(() => {
+    const today = new Date();
+    const dayOfWeek = today.getDay(); // 0 is Sunday, 6 is Saturday
+    const persianDayIndex = (dayOfWeek + 1) % 7; // 0 for Saturday, 6 for Friday
+    const saturdayTime = today.getTime() - (persianDayIndex * 86400000);
+
+    const weekdaysConfig = [
+      { day: 'شنبه', shortDay: 'ش', rev: 28500000, paid: 24000000, out: 4500000, rate: 84.2 },
+      { day: 'یکشنبه', shortDay: 'ی', rev: 34000000, paid: 29500000, out: 4500000, rate: 86.7 },
+      { day: 'دوشنبه', shortDay: 'د', rev: 41200000, paid: 36000000, out: 5200000, rate: 87.3 },
+      { day: 'سه‌شنبه', shortDay: 'س', rev: 38500000, paid: 31000000, out: 7500000, rate: 80.5 },
+      { day: 'چهارشنبه', shortDay: 'چ', rev: 32000000, paid: 28000000, out: 4000000, rate: 87.5 },
+      { day: 'پنج‌شنبه', shortDay: 'پ', rev: 26500000, paid: 22800000, out: 3700000, rate: 86.0 },
+      { day: 'جمعه', shortDay: 'ج', rev: 8500000, paid: 7500000, out: 1000000, rate: 88.2 }
+    ];
+
+    return weekdaysConfig.map((item, idx) => {
+      const d = new Date(saturdayTime + idx * 86400000);
+      return {
+        day: item.day,
+        shortDay: item.shortDay,
+        date: getPersianDateParts(d).formatted,
+        revenue: item.rev,
+        successfulPayments: item.paid,
+        outstandingBalance: item.out,
+        collectionRate: item.rate
+      };
+    });
+  }, []);
 
   // Aggregated totals
   const totalWeeklyRevenue = weeklyData.reduce((acc, d) => acc + d.revenue, 0);

@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { X, FileCheck2, Shield, CheckCircle2 } from 'lucide-react';
+import { X, FileCheck2, Shield, CheckCircle2, Send } from 'lucide-react';
 import { Patient, SayadCheck } from '../types/dental';
-import { formatToman } from '../utils/jalali';
+import { formatToman, getRelativePersianDate } from '../utils/jalali';
+import { clinicalSmsService } from '../services/smsService';
 
 interface AddCheckModalProps {
   isOpen: boolean;
@@ -20,14 +21,15 @@ export const AddCheckModal: React.FC<AddCheckModalProps> = ({
   const [sayadId, setSayadId] = useState('۷۴۹۱۸۳۹۲۱۶۴۸۵۲۰۰');
   const [bankName, setBankName] = useState('بانک ملت');
   const [amount, setAmount] = useState(10000000);
-  const [dueDate, setDueDate] = useState('۱۴۰۳/۰۹/۲۵');
+  const [dueDate, setDueDate] = useState(getRelativePersianDate(30));
   const [drawerName, setDrawerName] = useState('');
   const [isGuarantee, setIsGuarantee] = useState(false);
   const [description, setDescription] = useState('قسط دوم درمان ایمپلنت');
+  const [sendCheckSms, setSendCheckSms] = useState(true);
 
   if (!isOpen) return null;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const patient = patients.find(p => p.id === selectedPatientId);
     if (!patient) return;
@@ -47,6 +49,19 @@ export const AddCheckModal: React.FC<AddCheckModalProps> = ({
     };
 
     onAddCheck(newCheck);
+
+    if (sendCheckSms && patient.phone) {
+      await clinicalSmsService.sendPatternSms(
+        patient.phone,
+        patient.fullName,
+        'sayad_check_due',
+        {
+          amount: formatToman(amount),
+          dueDate
+        }
+      );
+    }
+
     onClose();
   };
 
@@ -148,7 +163,7 @@ export const AddCheckModal: React.FC<AddCheckModalProps> = ({
                 type="text"
                 value={dueDate}
                 onChange={(e) => setDueDate(e.target.value)}
-                placeholder="۱۴۰۳/۰۹/۲۵"
+                placeholder={getRelativePersianDate(30)}
                 className="w-full bg-white border border-amber-200 rounded-xl px-3 py-2 text-slate-900 font-mono focus:outline-none focus:border-amber-500 shadow-2xs"
                 required
               />
@@ -176,6 +191,16 @@ export const AddCheckModal: React.FC<AddCheckModalProps> = ({
               className="w-full bg-white border border-amber-200 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:border-amber-500 shadow-2xs"
             />
           </div>
+
+          <label className="flex items-center gap-2 pt-1 text-slate-700 font-medium cursor-pointer">
+            <input
+              type="checkbox"
+              checked={sendCheckSms}
+              onChange={(e) => setSendCheckSms(e.target.checked)}
+              className="rounded accent-amber-600 w-4 h-4"
+            />
+            <span className="text-[11px] font-bold">ارسال خودکار پیامک تایید دریافت چک صیادی و سررسید به بیمار</span>
+          </label>
 
           <div className="pt-2 flex items-center gap-2">
             <button

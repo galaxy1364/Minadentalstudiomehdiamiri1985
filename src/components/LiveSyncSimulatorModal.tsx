@@ -4,7 +4,7 @@ import {
   Monitor, Smartphone, DollarSign, RefreshCw, ShieldCheck
 } from 'lucide-react';
 import { Appointment, Patient } from '../types/dental';
-import { toPersianDigits, formatToman } from '../utils/jalali';
+import { toPersianDigits, formatToman, getCurrentPersianDate } from '../utils/jalali';
 
 interface LiveSyncSimulatorModalProps {
   isOpen: boolean;
@@ -82,7 +82,7 @@ export const LiveSyncSimulatorModal: React.FC<LiveSyncSimulatorModalProps> = ({
         phone: '۰۹۱۹۱۱۱۴۴۵۵',
         unit: 'یونیت ۱',
         doctor: 'دکتر مهدی امیری',
-        date: '۱۴۰۳/۰۸/۱۵',
+        date: getCurrentPersianDate(),
         time: '۱۹:۱۵',
         durationMinutes: 30,
         treatment: 'جرم‌گیری و بروساژ',

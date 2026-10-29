@@ -17,6 +17,26 @@ export type HapticType =
 
 // Audio Context for synthetic tactile feedback on iOS Safari
 let audioCtx: AudioContext | null = null;
+let acousticFeedbackEnabled = true;
+
+export function setAcousticFeedbackEnabled(enabled: boolean): void {
+  acousticFeedbackEnabled = enabled;
+  if (typeof window !== 'undefined') {
+    try {
+      localStorage.setItem('minadental_acoustic_feedback', enabled ? 'true' : 'false');
+    } catch {}
+  }
+}
+
+export function getAcousticFeedbackEnabled(): boolean {
+  if (typeof window !== 'undefined') {
+    try {
+      const stored = localStorage.getItem('minadental_acoustic_feedback');
+      if (stored !== null) return stored === 'true';
+    } catch {}
+  }
+  return acousticFeedbackEnabled;
+}
 
 function getAudioContext(): AudioContext | null {
   if (typeof window === 'undefined') return null;
@@ -37,6 +57,7 @@ function getAudioContext(): AudioContext | null {
 }
 
 function playSynthesizedHapticTick(frequency = 180, duration = 0.015, gainVal = 0.08) {
+  if (!getAcousticFeedbackEnabled()) return;
   try {
     const ctx = getAudioContext();
     if (!ctx) return;
