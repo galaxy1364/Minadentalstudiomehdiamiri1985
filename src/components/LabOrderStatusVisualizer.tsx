@@ -5,7 +5,7 @@ import {
   Zap, Clock, Radio, ArrowLeft
 } from 'lucide-react';
 import { LabOrder, LabStatus } from '../types/dental';
-import { toPersianDigits, formatToman } from '../utils/jalali';
+import { toPersianDigits, formatToman, getCurrentPersianDate, getRelativePersianDate } from '../utils/jalali';
 import { useHapticFeedback } from '../hooks/useHapticFeedback';
 
 export interface LabOrderStatusVisualizerProps {
@@ -93,9 +93,9 @@ const FALLBACK_ORDER: LabOrder = {
   workType: 'روکش تمام زیرکونیا',
   labName: 'لابراتوار پیشرو',
   shade: 'A2',
-  sendDate: '۱۴۰۳/۰۸/۰۱',
-  deliveryDate: '۱۴۰۳/۰۸/۱۰',
-  appointmentDate: '۱۴۰۳/۰۸/۱۲',
+  sendDate: getRelativePersianDate(-4),
+  deliveryDate: getCurrentPersianDate(),
+  appointmentDate: getRelativePersianDate(2),
   status: 'fabrication',
   cost: 2400000,
   reminderNotice: 'در حال ساخت'
@@ -269,7 +269,7 @@ export const LabOrderStatusVisualizer: React.FC<LabOrderStatusVisualizerProps> =
                 <div 
                   className={`w-6.5 h-6.5 sm:w-7 sm:h-7 rounded-full flex items-center justify-center transition-all border-2 shadow-xs ${
                     isCurrent
-                      ? `${stage.bgColor} text-white ${stage.borderColor} ring-3 ring-purple-300/60 shadow-sm ${isJustTapped ? 'scale-125 animate-ping' : ''}`
+                      ? `${stage.bgColor} text-white ${stage.borderColor} ring-3 ring-purple-300/60 shadow-sm ${isJustTapped ? 'scale-115' : ''}`
                       : isDone
                       ? 'bg-emerald-500 text-white border-emerald-400'
                       : 'bg-white text-slate-400 border-slate-300 hover:border-purple-400 hover:text-purple-600'
@@ -299,9 +299,9 @@ export const LabOrderStatusVisualizer: React.FC<LabOrderStatusVisualizerProps> =
                   {stage.shortLabel}
                 </span>
 
-                {/* Pulsing indicator under current stage */}
+                {/* Active indicator dot under current stage */}
                 {isCurrent && (
-                  <span className="w-1.5 h-1.5 rounded-full bg-purple-600 mt-0.5 animate-bounce" />
+                  <span className="w-1.5 h-1.5 rounded-full bg-purple-600 mt-0.5" />
                 )}
               </button>
             );
@@ -312,7 +312,7 @@ export const LabOrderStatusVisualizer: React.FC<LabOrderStatusVisualizerProps> =
       {/* Bottom Live Feedback Bar: Current stage details & 1-tap hint */}
       <div className="flex items-center justify-between pt-1.5 mt-0.5 text-[9px] text-slate-500 border-t border-purple-50">
         <div className="flex items-center gap-1">
-          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
           <span className="font-bold text-slate-700">
             مرحله فعلی: <strong className="text-purple-800 font-black">{currentStageDef.fullLabel}</strong>
           </span>

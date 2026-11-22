@@ -5,31 +5,49 @@ import {
   MapPin, QrCode, Sparkles, CheckCircle2, ChevronLeft,
   ChevronRight, Stethoscope, Share2, Printer
 } from 'lucide-react';
-import { OnlineBookingRequest } from '../types/dental';
-import { toPersianDigits, formatToman, PERSIAN_MONTHS, getPersianDateParts, getCurrentPersianDate, getCurrentPersianMonthName } from '../utils/jalali';
+import { Appointment, OnlineBookingRequest, UserAccount } from '../types/dental';
+import {
+  toPersianDigits,
+  formatToman,
+  PERSIAN_MONTHS,
+  getPersianDateParts,
+  getCurrentPersianDate,
+  getCurrentPersianMonthName,
+  isSamePersianDate
+} from '../utils/jalali';
 import { triggerHaptic } from '../utils/haptics';
+import { ViewportModalPortal } from './ViewportModalPortal';
+import { useEscapeKey } from '../hooks/useDialogA11y';
+import { copyTextSafely } from '../utils/clipboard';
+import { WheelTimePicker, ALL_CLINIC_TIME_SLOTS } from './WheelTimePicker';
 
 interface PatientBookingPortalModalProps {
   isOpen: boolean;
   onClose: () => void;
   onBookingConfirmed?: (booking: OnlineBookingRequest) => void;
+  appointments?: Appointment[];
+  users?: UserAccount[];
 }
 
 export const PatientBookingPortalModal: React.FC<PatientBookingPortalModalProps> = ({
   isOpen,
   onClose,
-  onBookingConfirmed
+  onBookingConfirmed,
+  appointments = [],
+  users
 }) => {
   const [currentStep, setCurrentStep] = useState<1 | 2 | 3 | 4>(1);
+  useEscapeKey(isOpen, onClose);
 
-  // Dynamic upcoming clinical days
+  // Dynamic upcoming clinical days starting from today
   const upcomingDays = React.useMemo(() => {
     return Array.from({ length: 5 }, (_, idx) => {
-      const d = new Date(Date.now() + (idx + 1) * 86400000);
+      const d = new Date(Date.now() + idx * 86400000);
       const parts = getPersianDateParts(d);
       return {
         day: parts.day,
-        weekday: parts.dayName,
+        weekday: idx === 0 ? 'امروز' : parts.dayName,
+        monthName: parts.monthName || PERSIAN_MONTHS[parts.monthIndex],
         dateStr: parts.formatted
       };
     });
@@ -39,8 +57,7 @@ export const PatientBookingPortalModal: React.FC<PatientBookingPortalModalProps>
   const [selectedService, setSelectedService] = useState('معاینه و طرح درمان تخصصی');
   const [selectedDoctor, setSelectedDoctor] = useState('دکتر مهدی امیری (جراح دندانپزشک)');
   const [selectedDate, setSelectedDate] = useState(() => {
-    const d = new Date(Date.now() + 86400000);
-    return getPersianDateParts(d).formatted;
+    return getPersianDateParts(new Date()).formatted;
   });
   const [selectedTime, setSelectedTime] = useState('۱۷:۱۵');
 
@@ -57,8 +74,70 @@ export const PatientBookingPortalModal: React.FC<PatientBookingPortalModalProps>
   const [isPregnant, setIsPregnant] = useState(false);
   const [takesBloodThinners, setTakesBloodThinners] = useState(false);
 
-  // Completed booking confirmation
+  // Dynamic clinic info synced with SettingsView general config
+  const clinicMeta = React.useMemo(() => {
+    try {
+      const saved = localStorage.getItem('minadental_clinic_general_cfg_v1');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        return {
+          name: parsed.clinicName || 'کلینیک دندانپزشکی مینادنتال',
+          address: parsed.clinicAddress || 'تهران، سعادت‌آباد، میدان کاج، مجتمع پزشکی مروارید، طبقه ۴'
+        };
+      }
+    } catch {}
+    return {
+      name: 'کلینیک دندانپزشکی مینادنتال',
+      address: 'تهران، سعادت‌آباد، میدان کاج، مجتمع پزشکی مروارید، طبقه ۴'
+    };
+  }, []);
+
+  const doctorsList = React.useMemo(() => {
+    const unitNames = ['یونیت آبی', 'یونیت زرد', 'یونیت جراحی'];
+    const dynamicDocs = (users || [])
+      .filter(u => u.isActive !== false && (u.role === 'doctor' || u.isDoctor || u.isManagerAndDoctor))
+      .map((u, idx) => ({
+        id: u.id,
+        name: u.fullName,
+        specialty: u.assignedPlatform || 'دندانپزشک معالج',
+        unit: unitNames[idx] || `یونیت ${toPersianDigits(idx + 1)}`
+      }));
+    if (dynamicDocs.length > 0) return dynamicDocs;
+    return [
+      { id: 'dr-1', name: 'دکتر مهدی امیری', specialty: 'جراح دندانپزشک و فلوشیپ ایمپلنت', unit: 'یونیت آبی' },
+      { id: 'dr-2', name: 'دکتر مریم رضایی', specialty: 'متخصص درمان ریشه (اندودنتیست)', unit: 'یونیت زرد' }
+    ];
+  }, [users]);
+
+  const occupiedTimesForDate = React.useMemo(() => {
+    const map: Record<string, string> = {};
+    appointments
+      .filter(
+        a =>
+          isSamePersianDate(a.date, selectedDate) &&
+          a.status !== 'cancelled' &&
+          a.status !== 'completed' &&
+          a.status !== 'no_show'
+      )
+      .forEach(a => {
+        map[a.time] = 'تکمیل شده';
+      });
+    return map;
+  }, [appointments, selectedDate]);
+
+  // Completed booking confirmation & feedback
   const [confirmedBooking, setConfirmedBooking] = useState<OnlineBookingRequest | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [actionToast, setActionToast] = useState<string | null>(null);
+
+  React.useEffect(() => {
+    if (isOpen && currentStep === 4 && confirmedBooking) {
+      // Allow user to start fresh next time modal opens
+      setCurrentStep(1);
+      setConfirmedBooking(null);
+      setFormError(null);
+    }
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -71,27 +150,34 @@ export const PatientBookingPortalModal: React.FC<PatientBookingPortalModalProps>
     { id: '6', title: 'دندانپزشکی اطفال', duration: '۳۰ دقیقه', fee: 200000, desc: 'پالپوتومی، فلورایدتراپی و روکش SS' },
   ];
 
-  const doctorsList = [
-    { id: 'dr-1', name: 'دکتر مهدی امیری', specialty: 'جراح دندانپزشک و فلوشیپ ایمپلنت', unit: 'یونیت ۱' },
-    { id: 'dr-2', name: 'دکتر مریم رضایی', specialty: 'متخصص درمان ریشه (اندودنتیست)', unit: 'یونیت ۲' }
-  ];
+  const selectedServiceObj = servicesList.find(s => s.title === selectedService) || servicesList[0];
+  const depositAmount = selectedServiceObj.fee;
 
-  const timeSlots = ['۱۶:۳۰', '۱۷:۱۵', '۱۸:۰۰', '۱۸:۴۵', '۱۹:۳۰', '۲۰:۱۵'];
+  const showToast = (msg: string) => {
+    setActionToast(msg);
+    setTimeout(() => setActionToast(null), 2600);
+  };
 
   const handleConfirmPaymentAndBook = () => {
+    if (!patientName.trim() || !phone.trim()) {
+      triggerHaptic('heavy');
+      setFormError('لطفاً نام و نام خانوادگی و شماره همراه بیمار را وارد نمایید.');
+      return;
+    }
+    setFormError(null);
     triggerHaptic('success');
     const trackingCode = `MD-${Math.floor(10000 + Math.random() * 90000)}`;
     const newBooking: OnlineBookingRequest = {
       id: `book-${Date.now()}`,
       trackingCode,
-      patientName: patientName || 'بیمار محترم کلینیک',
-      phone: phone || '۰۹۱۲۰۰۰۰۰۰۰',
-      nationalCode: nationalCode || '۰۰۱۸۳۷۴۶۲۱',
+      patientName: patientName.trim(),
+      phone: phone.trim(),
+      nationalCode: nationalCode.trim() || '۰۰۱۸۳۷۴۶۲۱',
       serviceTitle: selectedService,
       doctorName: selectedDoctor,
       date: selectedDate,
       time: selectedTime,
-      depositAmount: 200000,
+      depositAmount,
       paymentRefNumber: `SHP-${Date.now().toString().slice(-8)}`,
       healthIntake: {
         hasHighBloodPressure,
@@ -112,68 +198,83 @@ export const PatientBookingPortalModal: React.FC<PatientBookingPortalModalProps>
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in select-none">
-      <div className="w-full max-w-xl bg-white text-slate-900 rounded-t-[32px] sm:rounded-[32px] border border-slate-200 shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
-        
-        {/* Top Header */}
-        <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 text-white">
-          <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-2xl bg-white/15 border border-white/20 flex items-center justify-center">
-              <Calendar className="w-5 h-5 text-white" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h3 className="font-black text-sm text-white">پورتال نوبت‌دهی آنلاین اختصاصی بیمار</h3>
-                <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-white/20 text-[#c8ff00] font-bold">
-                  Self-Booking
-                </span>
+    <ViewportModalPortal isOpen={isOpen}>
+      <div
+        dir="rtl"
+        role="dialog"
+        aria-modal="true"
+        aria-label="پورتال نوبت‌دهی آنلاین بیمار"
+        className="fixed inset-0 z-[100] bg-slate-950/80 backdrop-blur-md flex flex-col sm:items-center sm:justify-center p-0 sm:p-4 animate-in fade-in select-none"
+        onClick={onClose}
+      >
+        <div
+          onClick={(e) => e.stopPropagation()}
+          className="w-full sm:max-w-xl h-[100dvh] sm:h-auto sm:max-h-[92dvh] bg-white text-slate-900 rounded-none sm:rounded-[32px] border-0 sm:border border-slate-200 shadow-2xl overflow-hidden flex flex-col text-right"
+        >
+          {/* Fixed Top Header */}
+          <div className="px-4 pt-3 pb-3.5 border-b border-slate-100 bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 text-white shrink-0 sticky top-0 z-20">
+            <div className="w-10 h-1 rounded-full bg-white/35 mx-auto mb-2 sm:hidden" />
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-2xl bg-white/15 border border-white/20 flex items-center justify-center">
+                  <Calendar className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-black text-sm text-white">پورتال نوبت‌دهی آنلاین اختصاصی بیمار</h3>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/20 text-white font-bold">
+                      رزرو آنلاین
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-emerald-100 font-medium">کلینیک دندانپزشکی مینادنتال · رزرو سریع ۲۴ ساعته</p>
+                </div>
               </div>
-              <p className="text-[11px] text-emerald-100 font-medium">کلینیک دندانپزشکی مینادنتال · رزرو سریع ۲۴ ساعته</p>
-            </div>
-          </div>
-          <button
-            onClick={onClose}
-            className="w-8 h-8 rounded-full bg-black/20 hover:bg-black/30 text-white flex items-center justify-center transition-colors"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-
-        {/* Step Indicator (Only during booking steps 1-3) */}
-        {currentStep < 4 && (
-          <div className="bg-slate-50 px-5 py-2.5 border-b border-slate-200/80 flex items-center justify-between text-xs">
-            {[
-              { step: 1, title: 'خدمت و پزشک' },
-              { step: 2, title: 'زمان نوبت' },
-              { step: 3, title: 'سوابق سلامت و بیعانه' }
-            ].map(item => (
-              <div 
-                key={item.step} 
-                className={`flex items-center gap-1.5 font-bold ${
-                  currentStep === item.step 
-                    ? 'text-emerald-700 font-black' 
-                    : currentStep > item.step 
-                    ? 'text-slate-400' 
-                    : 'text-slate-300'
-                }`}
+              <button
+                type="button"
+                onClick={onClose}
+                aria-label="بستن پورتال نوبت‌دهی آنلاین"
+                className="min-w-[38px] min-h-[38px] rounded-[12px] bg-black/20 hover:bg-black/30 text-white flex items-center justify-center transition-colors cursor-pointer"
               >
-                <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[11px] font-mono ${
-                  currentStep === item.step 
-                    ? 'bg-emerald-600 text-white shadow-2xs' 
-                    : currentStep > item.step 
-                    ? 'bg-emerald-100 text-emerald-700' 
-                    : 'bg-slate-200 text-slate-500'
-                }`}>
-                  {currentStep > item.step ? '✓' : toPersianDigits(item.step)}
-                </span>
-                <span>{item.title}</span>
-              </div>
-            ))}
+                <X className="w-4 h-4" />
+              </button>
+            </div>
           </div>
-        )}
 
-        {/* Modal Body */}
-        <div className="p-4 overflow-y-auto space-y-4 no-scrollbar flex-1 bg-slate-50/50">
+          {/* Step Indicator (Only during booking steps 1-3) */}
+          {currentStep < 4 && (
+            <div className="bg-slate-50 px-5 py-2.5 border-b border-slate-200/80 flex items-center justify-between text-xs shrink-0">
+              {[
+                { step: 1, title: 'خدمت و پزشک' },
+                { step: 2, title: 'زمان نوبت' },
+                { step: 3, title: 'سوابق سلامت و بیعانه' }
+              ].map(item => (
+                <div 
+                  key={item.step} 
+                  className={`flex items-center gap-1.5 font-bold ${
+                    currentStep === item.step 
+                      ? 'text-emerald-700 font-black' 
+                      : currentStep > item.step 
+                      ? 'text-slate-400' 
+                      : 'text-slate-300'
+                  }`}
+                >
+                  <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[11px] font-mono ${
+                    currentStep === item.step 
+                      ? 'bg-emerald-600 text-white shadow-2xs' 
+                      : currentStep > item.step 
+                      ? 'bg-emerald-100 text-emerald-700' 
+                      : 'bg-slate-200 text-slate-500'
+                  }`}>
+                    {currentStep > item.step ? '✓' : toPersianDigits(item.step)}
+                  </span>
+                  <span>{item.title}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Scrollable Modal Body */}
+          <div className="p-4 flex-1 overflow-y-auto overscroll-contain space-y-4 bg-slate-50/50">
           
           {/* STEP 1: SERVICE & DOCTOR SELECTION */}
           {currentStep === 1 && (
@@ -270,13 +371,13 @@ export const PatientBookingPortalModal: React.FC<PatientBookingPortalModalProps>
                   {upcomingDays.map(d => {
                     const isSelected = selectedDate === d.dateStr;
                     return (
-                      <button
-                        key={d.day}
+                      <button type="button"
+                        key={d.dateStr}
                         onClick={() => {
                           triggerHaptic('selection');
                           setSelectedDate(d.dateStr);
                         }}
-                        className={`p-2 rounded-2xl border transition-all flex flex-col items-center justify-center ${
+                        className={`p-2 rounded-2xl border transition-all flex flex-col items-center justify-center cursor-pointer ${
                           isSelected 
                             ? 'bg-emerald-600 text-white border-emerald-700 shadow-sm' 
                             : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
@@ -284,38 +385,21 @@ export const PatientBookingPortalModal: React.FC<PatientBookingPortalModalProps>
                       >
                         <span className="text-[9.5px] opacity-75">{d.weekday}</span>
                         <span className="text-sm font-black font-mono mt-0.5">{toPersianDigits(d.day)}</span>
-                        <span className="text-[8.5px] opacity-60">آبان</span>
+                        <span className="text-[8.5px] opacity-60">{d.monthName}</span>
                       </button>
                     );
                   })}
                 </div>
               </div>
 
-              {/* Hour / Time slot selection */}
+              {/* Hour / Time slot selection (08:00 AM to 23:00 PM Drum Wheel + Shifts) */}
               <div className="space-y-2 pt-2 border-t border-slate-200">
-                <label className="text-xs font-black text-slate-800 block">انتخاب ساعت خالی در شیفت بعدازظهر:</label>
-                <div className="grid grid-cols-3 gap-2">
-                  {timeSlots.map(time => {
-                    const isSelected = selectedTime === time;
-                    return (
-                      <button
-                        key={time}
-                        onClick={() => {
-                          triggerHaptic('selection');
-                          setSelectedTime(time);
-                        }}
-                        className={`py-2 px-3 rounded-xl font-mono text-xs font-black border transition-all flex items-center justify-center gap-1.5 ${
-                          isSelected 
-                            ? 'bg-[#0f1b13] text-[#c8ff00] border-[#c8ff00] shadow-sm' 
-                            : 'bg-white border-slate-200 text-slate-700 hover:bg-emerald-50'
-                        }`}
-                      >
-                        <Clock className="w-3.5 h-3.5 opacity-60" />
-                        <span>{toPersianDigits(time)}</span>
-                      </button>
-                    );
-                  })}
-                </div>
+                <label className="text-xs font-black text-slate-800 block">انتخاب ساعت نوبت (شیفت صبح ۸:۰۰ تا شیفت شب ۲۳:۰۰ · غلتکی):</label>
+                <WheelTimePicker
+                  value={selectedTime}
+                  occupiedTimes={occupiedTimesForDate}
+                  onChange={(t) => setSelectedTime(t)}
+                />
               </div>
             </div>
           )}
@@ -418,6 +502,16 @@ export const PatientBookingPortalModal: React.FC<PatientBookingPortalModalProps>
                   <label className="flex items-center gap-2 cursor-pointer">
                     <input
                       type="checkbox"
+                      checked={isPregnant}
+                      onChange={(e) => setIsPregnant(e.target.checked)}
+                      className="rounded accent-emerald-600 w-4 h-4"
+                    />
+                    <span className="font-bold text-slate-800">بارداری یا دوران شیردهی (جهت تنظیم بی‌حسی و رادیوگرافی)</span>
+                  </label>
+
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
                       checked={hasDrugAllergy}
                       onChange={(e) => setHasDrugAllergy(e.target.checked)}
                       className="rounded accent-emerald-600 w-4 h-4"
@@ -428,6 +522,7 @@ export const PatientBookingPortalModal: React.FC<PatientBookingPortalModalProps>
                   {hasDrugAllergy && (
                     <input
                       type="text"
+                      aria-label="نام دقیق داروی حساسیت‌زا"
                       value={allergyDetails}
                       onChange={(e) => setAllergyDetails(e.target.value)}
                       placeholder="نام دقیق داروی حساسیت‌زا را بنویسید..."
@@ -437,14 +532,21 @@ export const PatientBookingPortalModal: React.FC<PatientBookingPortalModalProps>
                 </div>
               </div>
 
-              {/* Deposit Payment Box */}
-              <div className="p-3 bg-slate-900 text-white rounded-2xl border border-slate-800 flex items-center justify-between">
-                <div>
-                  <span className="text-[11px] text-slate-400 block">مبلغ بیعانه ثبت قطعی نوبت:</span>
-                  <span className="text-sm font-black text-[#c8ff00] font-mono">{formatToman(200000)}</span>
+              {formError && (
+                <div className="p-2.5 rounded-xl bg-rose-50 border border-rose-300 text-rose-800 text-xs font-bold flex items-center gap-1.5">
+                  <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                  <span>{formError}</span>
                 </div>
-                <div className="flex items-center gap-1.5 text-[10px] text-slate-300">
-                  <ShieldCheck className="w-4 h-4 text-emerald-400" />
+              )}
+
+              {/* Deposit Payment Box */}
+              <div className="p-3 bg-emerald-50 text-emerald-950 rounded-2xl border border-emerald-200 flex items-center justify-between">
+                <div>
+                  <span className="text-[11px] text-emerald-700 font-bold block">مبلغ بیعانه ثبت قطعی ({selectedServiceObj.title}):</span>
+                  <span className="text-sm font-black text-emerald-800 font-mono">{formatToman(depositAmount)}</span>
+                </div>
+                <div className="flex items-center gap-1.5 text-[10px] text-emerald-800 font-bold">
+                  <ShieldCheck className="w-4 h-4 text-emerald-600" />
                   <span>درگاه امن بانکی شاپرک</span>
                 </div>
               </div>
@@ -511,26 +613,71 @@ export const PatientBookingPortalModal: React.FC<PatientBookingPortalModalProps>
                   </span>
                 </div>
 
-                {/* GPS Location Buttons */}
-                <div className="pt-1 flex items-center justify-between text-xs text-slate-600">
-                  <span className="flex items-center gap-1">
-                    <MapPin className="w-3.5 h-3.5 text-rose-500" />
-                    <span>مسیریابی مطب در نشان و بلد:</span>
-                  </span>
-                  <div className="flex items-center gap-1 font-bold">
-                    <button 
-                      onClick={() => alert('لینک مسیریاب نشان باز شد.')} 
-                      className="px-2 py-0.5 rounded-lg bg-sky-50 text-sky-700 border border-sky-200"
+                {/* GPS Location Buttons & Slip Print/Share */}
+                <div className="pt-1 space-y-2">
+                  <div className="flex items-center justify-between text-xs text-slate-600 flex-wrap gap-1.5">
+                    <span className="flex items-center gap-1">
+                      <MapPin className="w-3.5 h-3.5 text-rose-500" />
+                      <span>مسیریابی مطب در نشان و بلد:</span>
+                    </span>
+                    <div className="flex items-center gap-1 font-bold">
+                      <button 
+                        type="button"
+                        onClick={() => {
+                          triggerHaptic('selection');
+                          void copyTextSafely(`${clinicMeta.name} — ${clinicMeta.address}`);
+                          showToast('آدرس مطب برای مسیریاب نشان کپی شد ✓');
+                        }} 
+                        className="px-2 py-0.5 rounded-lg bg-sky-50 text-sky-700 border border-sky-200 cursor-pointer"
+                      >
+                        مسیریاب نشان ✓
+                      </button>
+                      <button 
+                        type="button"
+                        onClick={() => {
+                          triggerHaptic('selection');
+                          void copyTextSafely(`${clinicMeta.name} — ${clinicMeta.address}`);
+                          showToast('آدرس مطب برای مسیریاب بلد کپی شد ✓');
+                        }} 
+                        className="px-2 py-0.5 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200 cursor-pointer"
+                      >
+                        مسیریاب بلد ✓
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 pt-1.5 border-t border-slate-100">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        triggerHaptic('selection');
+                        const txt = `برگه پذیرش آنلاین ${clinicMeta.name}\nکد رهگیری: ${confirmedBooking.trackingCode}\nبیمار: ${confirmedBooking.patientName}\nتاریخ: ${confirmedBooking.date} ساعت ${confirmedBooking.time}\nبیعانه پرداختی: ${formatToman(confirmedBooking.depositAmount)}`;
+                        void copyTextSafely(txt);
+                        showToast('اطلاعات و کد رهگیری نوبت کپی شد ✓');
+                      }}
+                      className="flex-1 py-1.5 px-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-[11px] font-bold flex items-center justify-center gap-1 cursor-pointer"
                     >
-                      نشان
+                      <Share2 className="w-3.5 h-3.5" />
+                      <span>کپی کد رهگیری</span>
                     </button>
-                    <button 
-                      onClick={() => alert('لینک مسیریاب بلد باز شد.')} 
-                      className="px-2 py-0.5 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200"
+                    <button
+                      type="button"
+                      onClick={() => {
+                        triggerHaptic('light');
+                        window.print();
+                      }}
+                      className="flex-1 py-1.5 px-2.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-[11px] font-bold flex items-center justify-center gap-1 cursor-pointer"
                     >
-                      بلد
+                      <Printer className="w-3.5 h-3.5" />
+                      <span>چاپ برگه پذیرش</span>
                     </button>
                   </div>
+
+                  {actionToast && (
+                    <div className="p-2 rounded-xl bg-emerald-600 text-white text-[10.5px] font-bold text-center">
+                      {actionToast}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -538,86 +685,86 @@ export const PatientBookingPortalModal: React.FC<PatientBookingPortalModalProps>
 
         </div>
 
-        {/* Footer Navigation Buttons */}
-        <div className="p-4 border-t border-slate-100 bg-white flex items-center justify-between gap-2">
-          {currentStep === 1 && (
-            <>
+          {/* Fixed Footer Navigation Buttons */}
+          <div className="p-3.5 pb-[max(0.875rem,env(safe-area-inset-bottom))] border-t border-slate-200 bg-white/95 backdrop-blur-md flex items-center justify-between gap-2 shrink-0 sticky bottom-0 z-20">
+            {currentStep === 1 && (
+              <>
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="w-1/3 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold cursor-pointer"
+                >
+                  انصراف
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    triggerHaptic('selection');
+                    setCurrentStep(2);
+                  }}
+                  className="w-2/3 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black shadow-md shadow-emerald-600/25 active:scale-95 transition-all flex items-center justify-center gap-1 cursor-pointer"
+                >
+                  <span>مرحله بعد: انتخاب روز و ساعت</span>
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+              </>
+            )}
+
+            {currentStep === 2 && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setCurrentStep(1)}
+                  className="w-1/3 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold cursor-pointer"
+                >
+                  بازگشت
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    triggerHaptic('selection');
+                    setCurrentStep(3);
+                  }}
+                  className="w-2/3 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black shadow-md shadow-emerald-600/25 active:scale-95 transition-all flex items-center justify-center gap-1 cursor-pointer"
+                >
+                  <span>مرحله بعد: سوابق سلامت و بیعانه</span>
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+              </>
+            )}
+
+            {currentStep === 3 && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setCurrentStep(2)}
+                  className="w-1/3 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold cursor-pointer"
+                >
+                  بازگشت
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmPaymentAndBook}
+                  className="w-2/3 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black shadow-lg shadow-emerald-600/30 active:scale-95 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <CreditCard className="w-4 h-4" />
+                  <span>پرداخت بیعانه و ثبت نهایی نوبت</span>
+                </button>
+              </>
+            )}
+
+            {currentStep === 4 && (
               <button
                 type="button"
                 onClick={onClose}
-                className="w-1/3 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold"
+                className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black shadow-md shadow-emerald-600/25 active:scale-95 transition-all cursor-pointer"
               >
-                انصراف
+                بستن و اتمام
               </button>
-              <button
-                type="button"
-                onClick={() => {
-                  triggerHaptic('selection');
-                  setCurrentStep(2);
-                }}
-                className="w-2/3 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black shadow-md shadow-emerald-600/25 active:scale-95 transition-all flex items-center justify-center gap-1"
-              >
-                <span>مرحله بعد: انتخاب روز و ساعت</span>
-                <ChevronLeft className="w-4 h-4" />
-              </button>
-            </>
-          )}
-
-          {currentStep === 2 && (
-            <>
-              <button
-                type="button"
-                onClick={() => setCurrentStep(1)}
-                className="w-1/3 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold"
-              >
-                بازگشت
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  triggerHaptic('selection');
-                  setCurrentStep(3);
-                }}
-                className="w-2/3 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black shadow-md shadow-emerald-600/25 active:scale-95 transition-all flex items-center justify-center gap-1"
-              >
-                <span>مرحله بعد: سوابق سلامت و بیعانه</span>
-                <ChevronLeft className="w-4 h-4" />
-              </button>
-            </>
-          )}
-
-          {currentStep === 3 && (
-            <>
-              <button
-                type="button"
-                onClick={() => setCurrentStep(2)}
-                className="w-1/3 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold"
-              >
-                بازگشت
-              </button>
-              <button
-                type="button"
-                onClick={handleConfirmPaymentAndBook}
-                className="w-2/3 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black shadow-lg shadow-emerald-600/30 active:scale-95 transition-all flex items-center justify-center gap-1.5"
-              >
-                <CreditCard className="w-4 h-4" />
-                <span>پرداخت بیعانه و ثبت نهایی نوبت</span>
-              </button>
-            </>
-          )}
-
-          {currentStep === 4 && (
-            <button
-              type="button"
-              onClick={onClose}
-              className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black shadow-md shadow-emerald-600/25 active:scale-95 transition-all"
-            >
-              بستن و اتمام
-            </button>
-          )}
+            )}
+          </div>
         </div>
-
       </div>
-    </div>
+    </ViewportModalPortal>
   );
 };

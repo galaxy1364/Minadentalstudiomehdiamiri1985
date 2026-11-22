@@ -65,21 +65,11 @@
     </filter>
   </defs>
 
-  <!-- iOS / Android Squircle Chassis (Rounded Rect) -->
-  <rect width="512" height="512" rx="124" fill="url(#pwaBgGrad)"/>
-  
-  <!-- Outer Metallic Beveled Border -->
-  <rect x="6" y="6" width="500" height="500" rx="118" stroke="url(#pwaBorderBevel)" stroke-width="10" stroke-opacity="0.85"/>
-
-  <!-- Subtle Concentric Optical Bio-Orbit Rings -->
-  <circle cx="256" cy="256" r="195" stroke="#e9d5ff" stroke-width="4" stroke-dasharray="8 12" stroke-opacity="0.55"/>
-  <circle cx="256" cy="256" r="225" stroke="#c084fc" stroke-width="2" stroke-opacity="0.3"/>
-
-  <!-- Main 3D Anatomical Multi-Color Tooth Structure -->
-  <g filter="url(#tooth3dShadow)">
+  <!-- Frameless 3D Anatomical Multi-Color Tooth Structure (Scaled Up, No Square Box) -->
+  <g filter="url(#tooth3dShadow)" transform="translate(256, 256) scale(1.36) translate(-256, -268)">
     
     <!-- Base Depth / Ambient Occlusion Shadow Underneath Tooth -->
-    <ellipse cx="256" cy="425" rx="140" ry="24" fill="#3b0764" fill-opacity="0.22"/>
+    <ellipse cx="256" cy="425" rx="125" ry="18" fill="#581c87" fill-opacity="0.18"/>
 
     <!-- 1. Outer Deep Purple Anatomical Silhouette Foundation -->
     <path
@@ -208,21 +198,5 @@
       <circle cx="380" cy="142" r="2.2" fill="#ffffff"/>
     </g>
 
-  </g>
-
-  <!-- MinaDental Monogram Text at Base "MINA" -->
-  <g opacity="0.9">
-    <text
-      x="256"
-      y="472"
-      font-family="system-ui, -apple-system, 'SF Pro Display', 'Vazirmatn', sans-serif"
-      font-size="28"
-      font-weight="900"
-      letter-spacing="6"
-      fill="#6b21a8"
-      text-anchor="middle"
-    >
-      MINA DENTAL
-    </text>
   </g>
 </svg>

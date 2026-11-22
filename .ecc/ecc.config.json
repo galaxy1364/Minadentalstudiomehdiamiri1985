@@ -1,0 +1,33 @@
+{
+  "name": "minadental-ecc-harness",
+  "source": "https://github.com/affaan-m/ecc",
+  "version": "1.0.0",
+  "project": "MinaDental (مینادنتال)",
+  "stack": ["react-19", "typescript", "vite-8", "tailwindcss-4", "express-4", "zod-4", "vitest-5", "vite-plugin-pwa"],
+  "workflow": [
+    "plan",
+    "test",
+    "implement",
+    "review",
+    "verify",
+    "remember",
+    "improve"
+  ],
+  "rules": [
+    ".ecc/rules/coding-style.md",
+    ".ecc/rules/security-review.md",
+    ".ecc/rules/testing-tdd.md",
+    ".ecc/rules/verification-loop.md"
+  ],
+  "skills": [
+    ".ecc/skills/minadental-ecc/SKILL.md"
+  ],
+  "gates": {
+    "typecheck": "npm run lint",
+    "unitAndDomTests": "npm run test:vitest",
+    "eccStandardsAudit": "npm run test:ecc",
+    "moduleHealthAudit": "npm run test:modules",
+    "industrialAudit": "npm run test:industrial",
+    "productionBuild": "npm run build"
+  }
+}

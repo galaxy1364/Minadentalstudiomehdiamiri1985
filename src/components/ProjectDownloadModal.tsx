@@ -1,11 +1,22 @@
 import React, { useState } from 'react';
 import { 
   X, Download, Copy, CheckCheck, FileArchive, 
-  ExternalLink, AlertTriangle, ShieldCheck, HelpCircle,
-  Smartphone, Apple, Terminal
+  Smartphone, Apple, ShieldCheck, CheckCircle2
 } from 'lucide-react';
-import { downloadProjectArchive, getProjectArchiveUrl } from '../utils/downloader';
+import {
+  downloadProjectArchive,
+  downloadAndroidApk,
+  downloadIosIpa,
+  downloadIosMobileConfigProfile,
+  getProjectArchiveUrl,
+  getAndroidApkUrl,
+  getIosIpaUrl,
+  MINADENTAL_PACKAGE_VERSION
+} from '../utils/downloader';
 import { useHapticFeedback } from '../hooks/useHapticFeedback';
+import { useEscapeKey } from '../hooks/useDialogA11y';
+import { copyTextSafely } from '../utils/clipboard';
+import { usePWAInstall } from '../hooks/usePWAInstall';
 
 interface ProjectDownloadModalProps {
   isOpen: boolean;
@@ -17,89 +28,125 @@ export const ProjectDownloadModal: React.FC<ProjectDownloadModalProps> = ({
   onClose
 }) => {
   const { impactLight, impactHeavy, success, selection } = useHapticFeedback();
-  const [activeTab, setActiveTab] = useState<'download' | 'mobile_guide'>('download');
-  const [downloading, setDownloading] = useState(false);
-  const [copied, setCopied] = useState(false);
-  const [copiedCmd, setCopiedCmd] = useState<string | null>(null);
+  const { isInstallable, isInstalled, install: triggerPwaInstall } = usePWAInstall();
+  useEscapeKey(isOpen, onClose);
+  const [activeTab, setActiveTab] = useState<'native_packages' | 'source_zip'>('native_packages');
+  const [downloadingPkg, setDownloadingPkg] = useState<string | null>(null);
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [statusMsg, setStatusMsg] = useState<string | null>(null);
 
   if (!isOpen) return null;
 
-  const fullUrl = getProjectArchiveUrl();
+  const fullZipUrl = getProjectArchiveUrl();
+  const apkUrl = getAndroidApkUrl();
+  const ipaUrl = getIosIpaUrl();
 
-  const handleCopyCommand = async (cmd: string, label: string) => {
-    try {
-      if (navigator.clipboard) {
-        await navigator.clipboard.writeText(cmd);
-      }
-      setCopiedCmd(label);
+  const handleCopyText = async (text: string, key: string) => {
+    const ok = await copyTextSafely(text);
+    if (ok) {
+      setCopiedKey(key);
       impactLight();
-      setTimeout(() => setCopiedCmd(null), 2500);
-    } catch (e) {
-      console.error(e);
+      setTimeout(() => setCopiedKey(null), 2500);
     }
   };
 
-  const handleDownload = async () => {
-    setDownloading(true);
-    setStatusMsg('در حال بارگیری بسته زیپ پروژه...');
+  const handleDownloadApk = async () => {
+    setDownloadingPkg('apk');
+    setStatusMsg('در حال آماده‌سازی و دانلود فایل نصبی اندروید (MinaDental-v27.5.0.apk)...');
     impactHeavy();
-
-    const ok = await downloadProjectArchive(
+    await downloadAndroidApk(
       () => {
-        setDownloading(false);
+        setDownloadingPkg(null);
         success();
-        setStatusMsg('✅ فایل minadental-source-full.zip با موفقیت دریافت و در دانلودهای گوشی/سیستم ذخیره شد.');
+        setStatusMsg('✅ فایل نصبی اندروید (MinaDental-v27.5.0.apk) با موفقیت در پوشه دانلودهای دستگاه ذخیره شد.');
       },
       (err) => {
-        setDownloading(false);
-        setStatusMsg(`خطا: ${err.message}. لطفا لینک کامل را کپی و در تب جدید باز فرمایید.`);
+        setDownloadingPkg(null);
+        setStatusMsg(`خطا در دانلود APK: ${err.message}`);
       }
     );
-
-    if (!ok) {
-      setDownloading(false);
-    }
   };
 
-  const handleCopyUrl = async () => {
-    try {
-      if (navigator.clipboard) {
-        await navigator.clipboard.writeText(fullUrl);
-      } else {
-        const input = document.createElement('input');
-        input.value = fullUrl;
-        document.body.appendChild(input);
-        input.select();
-        document.execCommand('copy');
-        document.body.removeChild(input);
+  const handleDownloadIpa = async () => {
+    setDownloadingPkg('ipa');
+    setStatusMsg('در حال آماده‌سازی و دانلود پکیج آیفون (MinaDental-v27.5.0.ipa)...');
+    impactHeavy();
+    await downloadIosIpa(
+      () => {
+        setDownloadingPkg(null);
+        success();
+        setStatusMsg('✅ فایل نصبی آیفون (MinaDental-v27.5.0.ipa) با موفقیت در پوشه دانلودها ذخیره شد.');
+      },
+      (err) => {
+        setDownloadingPkg(null);
+        setStatusMsg(`خطا در دانلود IPA: ${err.message}`);
       }
-      setCopied(true);
-      impactLight();
-      setTimeout(() => setCopied(false), 3000);
-    } catch (e) {
-      console.error(e);
-    }
+    );
+  };
+
+  const handleDownloadIosProfile = async () => {
+    setDownloadingPkg('mobileconfig');
+    setStatusMsg('در حال دریافت پروفایل نصب مستقیم آیفون (MinaDental-iOS27.mobileconfig)...');
+    impactHeavy();
+    await downloadIosMobileConfigProfile(
+      () => {
+        setDownloadingPkg(null);
+        success();
+        setStatusMsg('✅ پروفایل آیفون دانلود شد! در آیفون وارد Settings > Profile Downloaded شوید و Install را بزنید تا آیکون بنفش مینادنتال نصب شود.');
+      },
+      (err) => {
+        setDownloadingPkg(null);
+        setStatusMsg(`خطا در دریافت پروفایل iOS: ${err.message}`);
+      }
+    );
+  };
+
+  const handleDownloadZip = async () => {
+    setDownloadingPkg('zip');
+    setStatusMsg('در حال بارگیری بسته کامل سورس پروژه...');
+    impactHeavy();
+    await downloadProjectArchive(
+      () => {
+        setDownloadingPkg(null);
+        success();
+        setStatusMsg('✅ فایل minadental-source-full.zip با موفقیت دریافت شد.');
+      },
+      (err) => {
+        setDownloadingPkg(null);
+        setStatusMsg(`خطا: ${err.message}`);
+      }
+    );
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in select-none">
-      <div className="w-full max-w-lg bg-white rounded-t-[28px] sm:rounded-[24px] border border-slate-200 p-4 sm:p-5 space-y-4 max-h-[92vh] overflow-y-auto shadow-2xl text-slate-900 text-right" dir="rtl">
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="دانلود مستقیم فایل نصبی اندروید APK و آیفون IPA مینادنتال"
+      className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in select-none"
+    >
+      <div className="w-full max-w-xl bg-white rounded-t-[28px] sm:rounded-[26px] border border-slate-200 p-4 sm:p-5 space-y-4 max-h-[92vh] overflow-y-auto shadow-2xl text-slate-900 text-right" dir="rtl">
         
         {/* Header */}
         <div className="flex items-center justify-between pb-3 border-b border-slate-100">
           <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-2xl bg-amber-500 text-slate-950 flex items-center justify-center shadow-xs">
-              <FileArchive className="w-5 h-5 stroke-[2.2]" />
+            <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-purple-600 to-indigo-700 text-white flex items-center justify-center shadow-xs">
+              <Smartphone className="w-5 h-5 stroke-[2.2]" />
             </div>
             <div>
-              <h3 className="text-sm font-black text-slate-900 leading-tight">سورس‌کد و بسته‌های نصبی مینادنتال</h3>
-              <p className="text-[11px] text-slate-500 font-bold mt-0.5">نسخه رسمی نهایی · ۳۵۲ کیلوبایت · پشتیبانی بومی Capacitor</p>
+              <h3 className="text-sm font-black text-slate-900 leading-tight">
+                سورس‌کد و بسته‌های نصبی مینادنتال (APK و IPA)
+              </h3>
+              <p className="text-[11px] text-slate-500 font-bold mt-0.5">
+                مینادنتال نسخه {MINADENTAL_PACKAGE_VERSION} · شناسه بسته: <span className="font-mono">ir.minadental.app</span>
+              </p>
             </div>
           </div>
           <button 
+            type="button"
             onClick={onClose} 
-            className="w-7 h-7 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-800 flex items-center justify-center transition-colors cursor-pointer"
+            aria-label="بستن پنجره دانلود"
+            className="min-w-[38px] min-h-[38px] rounded-[12px] bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-800 flex items-center justify-center transition-colors cursor-pointer"
           >
             <X className="w-4 h-4" />
           </button>
@@ -109,77 +156,210 @@ export const ProjectDownloadModal: React.FC<ProjectDownloadModalProps> = ({
         <div className="flex items-center gap-1.5 p-1 bg-slate-100 rounded-2xl text-xs font-bold">
           <button
             type="button"
-            onClick={() => { selection(); setActiveTab('download'); }}
-            className={`flex-1 py-1.5 rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-              activeTab === 'download' ? 'bg-white text-slate-950 shadow-xs font-black' : 'text-slate-500 hover:text-slate-900'
-            }`}
-          >
-            <Download className="w-3.5 h-3.5" />
-            <span>دانلود سورس کامل (ZIP)</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => { selection(); setActiveTab('mobile_guide'); }}
-            className={`flex-1 py-1.5 rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-              activeTab === 'mobile_guide' ? 'bg-purple-600 text-white shadow-xs font-black' : 'text-slate-500 hover:text-slate-900'
+            onClick={() => { selection(); setActiveTab('native_packages'); }}
+            className={`flex-1 py-2 rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+              activeTab === 'native_packages' ? 'bg-purple-600 text-white shadow-xs font-black' : 'text-slate-600 hover:text-slate-900'
             }`}
           >
             <Smartphone className="w-3.5 h-3.5" />
-            <span>ساخت فایل نصبی APK و IPA</span>
+            <span>دانلود مستقیم APK و IPA</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => { selection(); setActiveTab('source_zip'); }}
+            className={`flex-1 py-2 rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+              activeTab === 'source_zip' ? 'bg-white text-slate-950 shadow-xs font-black' : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <FileArchive className="w-3.5 h-3.5" />
+            <span>سورس کامل و کامپایل (ZIP)</span>
           </button>
         </div>
 
-        {/* TAB 1: DIRECT DOWNLOAD */}
-        {activeTab === 'download' && (
-          <div className="space-y-4 animate-in fade-in">
-            {/* Root Cause Clarification Banner */}
-            <div className="p-3 rounded-2xl bg-amber-50 border border-amber-200/90 text-amber-950 space-y-1.5 text-xs">
-              <div className="flex items-center gap-1.5 font-black text-amber-900">
-                <AlertTriangle className="w-4 h-4 text-amber-700 shrink-0" />
-                <span>دلیل خطای DNS_PROBE_FINISHED_NXDOMAIN در کروم:</span>
+        {statusMsg && (
+          <div className="p-3 rounded-2xl bg-emerald-50 border border-emerald-300 text-emerald-950 text-xs font-black flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+            <span>{statusMsg}</span>
+          </div>
+        )}
+
+        {/* TAB 1: DIRECT INSTALL (PWA + iOS PROFILE) & CAPACITOR PACKAGES */}
+        {activeTab === 'native_packages' && (
+          <div className="space-y-3.5 animate-in fade-in">
+            
+            {/* 1. ANDROID PWA & CAPACITOR APK BUNDLE SECTION */}
+            <div className="p-3.5 rounded-2xl bg-gradient-to-br from-emerald-50/90 via-white to-teal-50/70 border border-emerald-200 space-y-2.5 shadow-2xs">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-xl bg-emerald-600 text-white flex items-center justify-center shadow-2xs">
+                    <Smartphone className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-black text-slate-900">
+                      نسخه اندروید (نصب مستقیم PWA + بسته Capacitor APK)
+                    </h4>
+                    <p className="text-[10.5px] text-emerald-800 font-bold">
+                      نصب فوری PWA در Chrome/Samsung · بسته وب <span className="font-mono">MinaDental-v{MINADENTAL_PACKAGE_VERSION}.apk</span> (برای APK امضاشده بومی از سورس Capacitor در Android Studio بیلد بگیرید)
+                    </p>
+                  </div>
+                </div>
+                <span className="px-2 py-0.5 rounded-lg bg-emerald-100 text-emerald-900 text-[10px] font-mono font-black">
+                  PWA + APK Bundle
+                </span>
               </div>
-              <p className="text-[11px] text-amber-900/90 leading-relaxed font-medium">
-                مرورگر کروم عبارت <span className="font-mono font-bold" dir="ltr">minadental-source-full.zip</span> را به جای نام فایل، به عنوان یک دامنه اینترنتی (به دلیل پسوند <span className="font-mono font-bold" dir="ltr">.zip</span>) تفسیر کرده و به اشتباه در جستجوی سایت آن در اینترنت برآمده است!
-              </p>
-              <p className="text-[11px] text-amber-900/90 leading-relaxed font-bold">
-                راهکار: مستقیماً از دکمه سبز دانلود زیر استفاده فرمایید، یا لینک کامل دارای <span className="font-mono font-bold" dir="ltr">https://</span> را کپی نمایید.
-              </p>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={async () => {
+                    impactHeavy();
+                    if (isInstallable) {
+                      const ok = await triggerPwaInstall();
+                      if (ok) {
+                        setStatusMsg('✅ اپلیکیشن مینادنتال مستقیماً روی صفحه اصلی اندروید نصب شد!');
+                      }
+                    } else {
+                      setStatusMsg('در مرورگر Chrome اندروید از منوی ⋮ گزینه «نصب اپلیکیشن / Add to Home Screen» را بزنید.');
+                    }
+                  }}
+                  className="py-2.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs shadow-sm flex items-center justify-center gap-1.5 active:scale-95 transition-all cursor-pointer"
+                >
+                  <ShieldCheck className="w-4 h-4 text-[#c8ff00]" />
+                  <span>
+                    {isInstalled ? '✓ نصب شده روی دستگاه' : 'نصب مستقیم PWA روی اندروید'}
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleDownloadApk}
+                  disabled={downloadingPkg === 'apk'}
+                  className="py-2.5 px-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-black text-xs shadow-sm flex items-center justify-center gap-1.5 active:scale-95 transition-all cursor-pointer disabled:opacity-60"
+                >
+                  <Download className="w-4 h-4" />
+                  <span>
+                    {downloadingPkg === 'apk'
+                      ? 'در حال دانلود...'
+                      : `بسته Capacitor APK (${MINADENTAL_PACKAGE_VERSION})`}
+                  </span>
+                </button>
+              </div>
             </div>
 
-            {/* Primary Direct Download Button */}
-            <div className="space-y-2">
-              <button
-                onClick={handleDownload}
-                disabled={downloading}
-                className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 hover:from-emerald-700 hover:to-teal-700 text-white font-black text-xs shadow-md shadow-emerald-600/25 active:scale-95 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60"
-              >
-                <Download className={`w-4 h-4 ${downloading ? 'animate-bounce' : ''}`} />
-                <span>{downloading ? 'در حال آماده‌سازی و دانلود فایل...' : 'دانلود مستقیم فایل پروژه (minadental-source-full.zip)'}</span>
-              </button>
+            {/* 2. IPHONE / IPAD MOBILECONFIG & IPA BUNDLE SECTION */}
+            <div className="p-3.5 rounded-2xl bg-gradient-to-br from-purple-50/90 via-white to-indigo-50/70 border border-purple-200 space-y-2.5 shadow-2xs">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-xl bg-purple-600 text-white flex items-center justify-center shadow-2xs">
+                    <Apple className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-black text-slate-900">
+                      نسخه آیفون و آیپد (پروفایل نصب مستقیم + بسته Capacitor IPA)
+                    </h4>
+                    <p className="text-[10.5px] text-purple-800 font-bold">
+                      نصب فوری تمام‌صفحه روی آیفون با <span className="font-mono">.mobileconfig</span> · برای IPA امضاشده بومی از Xcode و سورس Capacitor بیلد بگیرید
+                    </p>
+                  </div>
+                </div>
+                <span className="px-2 py-0.5 rounded-lg bg-purple-100 text-purple-900 text-[10px] font-mono font-black">
+                  iOS Profile + IPA
+                </span>
+              </div>
 
-              {statusMsg && (
-                <p className="text-[11px] font-bold text-center text-slate-700 bg-slate-50 p-2 rounded-xl border border-slate-200">
-                  {statusMsg}
-                </p>
-              )}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={handleDownloadIosProfile}
+                  disabled={downloadingPkg === 'mobileconfig'}
+                  className="py-2.5 px-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs shadow-sm flex items-center justify-center gap-1.5 active:scale-95 transition-all cursor-pointer disabled:opacity-60"
+                >
+                  <Apple className="w-4 h-4" />
+                  <span>نصب مستقیم روی آیفون (.mobileconfig)</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleDownloadIpa}
+                  disabled={downloadingPkg === 'ipa'}
+                  className="py-2.5 px-3 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-black text-xs shadow-sm flex items-center justify-center gap-1.5 active:scale-95 transition-all cursor-pointer disabled:opacity-60"
+                >
+                  <Download className="w-4 h-4" />
+                  <span>
+                    {downloadingPkg === 'ipa'
+                      ? 'در حال دانلود...'
+                      : `بسته Capacitor IPA (${MINADENTAL_PACKAGE_VERSION})`}
+                  </span>
+                </button>
+              </div>
+
+              <div className="p-2.5 rounded-xl bg-white/90 border border-purple-200/80 text-[10.5px] text-slate-700 space-y-1 font-bold leading-relaxed">
+                <div>
+                  🍏 <span className="text-purple-900 font-black">نصب فوری آیفون (آماده استفاده):</span> در Safari دکمه «نصب مستقیم روی آیفون» را بزنید و در Settings گزینه <span className="font-mono">Profile Downloaded &gt; Install</span> را تایید کنید (یا <span className="font-mono">Share &gt; Add to Home Screen</span>).
+                </div>
+                <div>
+                  🛠️ <span className="text-purple-900 font-black">بیلد بومی امضاشده (APK / IPA):</span> از تب «سورس کامل (ZIP)» سورس پروژه را دانلود کرده و با Capacitor در Android Studio یا Xcode امضای رسمی بزنید.
+                </div>
+              </div>
             </div>
 
-            {/* Direct Link Copier (Full Absolute URL) */}
+            {/* Direct URL Copy Links for Mobile Browsers */}
+            <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200 space-y-2 text-[11px]">
+              <span className="font-black text-slate-800 block">لینک‌های مستقیم دانلود:</span>
+              <div className="flex items-center justify-between gap-2 bg-white p-2 rounded-xl border border-slate-200">
+                <span className="font-mono text-[10.5px] text-slate-700 truncate" dir="ltr">{apkUrl}</span>
+                <button
+                  type="button"
+                  onClick={() => handleCopyText(apkUrl, 'apkUrl')}
+                  className="px-2.5 py-1 rounded-lg bg-emerald-600 text-white font-bold text-[10px] shrink-0 cursor-pointer"
+                >
+                  {copiedKey === 'apkUrl' ? 'کپی شد ✓' : 'کپی لینک APK'}
+                </button>
+              </div>
+              <div className="flex items-center justify-between gap-2 bg-white p-2 rounded-xl border border-slate-200">
+                <span className="font-mono text-[10.5px] text-slate-700 truncate" dir="ltr">{ipaUrl}</span>
+                <button
+                  type="button"
+                  onClick={() => handleCopyText(ipaUrl, 'ipaUrl')}
+                  className="px-2.5 py-1 rounded-lg bg-purple-600 text-white font-bold text-[10px] shrink-0 cursor-pointer"
+                >
+                  {copiedKey === 'ipaUrl' ? 'کپی شد ✓' : 'کپی لینک IPA'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* TAB 2: SOURCE CODE ZIP & CAPACITOR CLI */}
+        {activeTab === 'source_zip' && (
+          <div className="space-y-3.5 text-xs animate-in fade-in">
+            <button
+              type="button"
+              onClick={handleDownloadZip}
+              disabled={downloadingPkg === 'zip'}
+              className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-slate-950 font-black text-xs shadow-md active:scale-95 transition-all flex items-center justify-center gap-2 cursor-pointer"
+            >
+              <Download className="w-4 h-4" />
+              <span>دانلود کامل سورس پروژه (minadental-source-full.zip)</span>
+            </button>
+
             <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
-              <span className="text-[11px] font-black text-slate-700 block">لینک کامل و رسمی دانلود اینترنتی:</span>
+              <span className="text-[11px] font-black text-slate-700 block">لینک مستقیم سورس کامل:</span>
               <div className="flex items-center gap-2">
                 <input
+                  aria-label="لینک کامل و رسمی دانلود اینترنتی"
                   type="text"
                   readOnly
-                  value={fullUrl}
+                  value={fullZipUrl}
                   className="flex-1 bg-white border border-slate-200 rounded-xl px-2.5 py-1.5 text-[11px] font-mono text-slate-700 text-left focus:outline-none select-all"
                   dir="ltr"
                 />
                 <button
-                  onClick={handleCopyUrl}
-                  className="py-1.5 px-3 rounded-xl bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs flex items-center gap-1 shrink-0 active:scale-95 transition-all cursor-pointer"
+                  type="button"
+                  onClick={() => handleCopyText(fullZipUrl, 'zipUrl')}
+                  className="py-1.5 px-3 rounded-xl bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs flex items-center gap-1 shrink-0 cursor-pointer"
                 >
-                  {copied ? (
+                  {copiedKey === 'zipUrl' ? (
                     <>
                       <CheckCheck className="w-3.5 h-3.5 text-emerald-400" />
                       <span>کپی شد</span>
@@ -192,158 +372,9 @@ export const ProjectDownloadModal: React.FC<ProjectDownloadModalProps> = ({
                   )}
                 </button>
               </div>
-              <p className="text-[10px] text-slate-500 font-medium">
-                با باز کردن این لینک کامل در مرورگر گوشی یا کامپیوتر، فایل زیپ فوراً ذخیره می‌گردد.
-              </p>
             </div>
           </div>
         )}
-
-        {/* TAB 2: MOBILE NATIVE APK & IPA BUILD GUIDE */}
-        {activeTab === 'mobile_guide' && (
-          <div className="space-y-3 text-xs animate-in fade-in">
-            <div className="p-3 rounded-2xl bg-purple-50 border border-purple-200 text-purple-950 space-y-1">
-              <div className="flex items-center gap-1.5 font-black text-purple-900">
-                <Smartphone className="w-4 h-4 text-purple-700" />
-                <span>خروجی باینری مستقل با شناسه ir.minadental.app:</span>
-              </div>
-              <p className="text-[11px] text-purple-900/90 leading-relaxed">
-                فایل <span className="font-mono font-bold">capacitor.config.ts</span> در ریشه پروژه قرار داده شده است. پس از استخراج فایل زیپ، با دستورات زیر روی سیستم خود فایل نصبی تولید فرمایید:
-              </p>
-            </div>
-
-            {/* Android APK Box */}
-            <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="font-black text-slate-900 flex items-center gap-1.5">
-                  <Smartphone className="w-4 h-4 text-emerald-600" />
-                  <span>تولید APK اندروید (تبلت‌های پذیرش و گوشی):</span>
-                </span>
-                <span className="text-[10px] bg-emerald-100 text-emerald-800 font-mono font-bold px-2 py-0.5 rounded-md">
-                  Android APK
-                </span>
-              </div>
-              <div className="p-2 rounded-xl bg-slate-900 text-emerald-300 font-mono text-[11px] ltr text-left flex items-center justify-between">
-                <span>npm run build && npx cap add android && npx cap open android</span>
-                <button
-                  type="button"
-                  onClick={() => handleCopyCommand('npm run build && npx cap add android && npx cap open android', 'apk')}
-                  className="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 text-[10px] shrink-0 mr-2 cursor-pointer"
-                >
-                  {copiedCmd === 'apk' ? 'کپی شد' : 'کپی دستور'}
-                </button>
-              </div>
-              <p className="text-[10.5px] text-slate-500">
-                اندروید استودیو باز شده و با کلیک روی <span className="font-bold">Build &gt; Build APK</span> فایل <span className="font-mono font-bold">app-debug.apk</span> تحویل داده می‌شود.
-              </p>
-            </div>
-
-            {/* iOS IPA Box */}
-            <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="font-black text-slate-900 flex items-center gap-1.5">
-                  <Apple className="w-4 h-4 text-slate-800" />
-                  <span>تولید IPA آیفون (برای گوشی اپل پزشک):</span>
-                </span>
-                <span className="text-[10px] bg-slate-200 text-slate-800 font-mono font-bold px-2 py-0.5 rounded-md">
-                  iOS IPA
-                </span>
-              </div>
-              <div className="p-2 rounded-xl bg-slate-900 text-cyan-300 font-mono text-[11px] ltr text-left flex items-center justify-between">
-                <span>npm run build && npx cap add ios && npx cap open ios</span>
-                <button
-                  type="button"
-                  onClick={() => handleCopyCommand('npm run build && npx cap add ios && npx cap open ios', 'ipa')}
-                  className="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 text-[10px] shrink-0 mr-2 cursor-pointer"
-                >
-                  {copiedCmd === 'ipa' ? 'کپی شد' : 'کپی دستور'}
-                </button>
-              </div>
-              <p className="text-[10.5px] text-slate-500">
-                محیط Xcode در سیستم‌عامل مک باز شده و از منوی <span className="font-bold">Product &gt; Archive</span> بسته IPA برای توزیع داخلی یا استور آماده می‌شود.
-              </p>
-            </div>
-          </div>
-        )}
-
-        {/* Primary Direct Download Button */}
-        <div className="space-y-2">
-          <button
-            onClick={handleDownload}
-            disabled={downloading}
-            className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 hover:from-emerald-700 hover:to-teal-700 text-white font-black text-xs shadow-md shadow-emerald-600/25 active:scale-95 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60"
-          >
-            <Download className={`w-4 h-4 ${downloading ? 'animate-bounce' : ''}`} />
-            <span>{downloading ? 'در حال آماده‌سازی و دانلود فایل...' : 'دانلود مستقیم فایل پروژه (minadental-source-full.zip)'}</span>
-          </button>
-
-          {statusMsg && (
-            <p className="text-[11px] font-bold text-center text-slate-700 bg-slate-50 p-2 rounded-xl border border-slate-200">
-              {statusMsg}
-            </p>
-          )}
-        </div>
-
-        {/* Direct Link Copier (Full Absolute URL) */}
-        <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
-          <span className="text-[11px] font-black text-slate-700 block">لینک کامل و رسمی دانلود اینترنتی:</span>
-          <div className="flex items-center gap-2">
-            <input
-              type="text"
-              readOnly
-              value={fullUrl}
-              className="flex-1 bg-white border border-slate-200 rounded-xl px-2.5 py-1.5 text-[11px] font-mono text-slate-700 text-left focus:outline-none select-all"
-              dir="ltr"
-            />
-            <button
-              onClick={handleCopyUrl}
-              className="py-1.5 px-3 rounded-xl bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs flex items-center gap-1 shrink-0 active:scale-95 transition-all"
-            >
-              {copied ? (
-                <>
-                  <CheckCheck className="w-3.5 h-3.5 text-emerald-400" />
-                  <span>کپی شد</span>
-                </>
-              ) : (
-                <>
-                  <Copy className="w-3.5 h-3.5" />
-                  <span>کپی لینک</span>
-                </>
-              )}
-            </button>
-          </div>
-          <p className="text-[10px] text-slate-500 font-medium">
-            با باز کردن این لینک کامل در مرورگر گوشی یا کامپیوتر، فایل زیپ فوراً ذخیره می‌گردد.
-          </p>
-        </div>
-
-        {/* Export Formats Included */}
-        <div className="grid grid-cols-3 gap-2 pt-1 text-center">
-          <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 flex flex-col items-center gap-1">
-            <Smartphone className="w-4 h-4 text-emerald-600" />
-            <span className="text-[11px] font-black text-slate-800">خروجی APK</span>
-            <span className="text-[9.5px] text-slate-500 font-bold">اندروید با Capacitor</span>
-          </div>
-          <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 flex flex-col items-center gap-1">
-            <Apple className="w-4 h-4 text-slate-800" />
-            <span className="text-[11px] font-black text-slate-800">خروجی IPA</span>
-            <span className="text-[9.5px] text-slate-500 font-bold">آیفون با Xcode</span>
-          </div>
-          <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 flex flex-col items-center gap-1">
-            <Terminal className="w-4 h-4 text-purple-600" />
-            <span className="text-[11px] font-black text-slate-800">نسخه PWA</span>
-            <span className="text-[9.5px] text-slate-500 font-bold">نصب مستقیم در مرورگر</span>
-          </div>
-        </div>
-
-        <div className="pt-2">
-          <button
-            onClick={onClose}
-            className="w-full py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition-colors"
-          >
-            بستن پنجره
-          </button>
-        </div>
 
       </div>
     </div>

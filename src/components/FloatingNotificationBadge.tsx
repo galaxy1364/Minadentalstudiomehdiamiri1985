@@ -14,6 +14,7 @@ export const FloatingNotificationBadge: React.FC<FloatingNotificationBadgeProps>
 }) => {
   // 1. Vertical position state with localStorage persistence
   const [topPos, setTopPos] = useState<number>(() => {
+    if (typeof window === 'undefined') return 180;
     try {
       const saved = localStorage.getItem('minadental_notif_badge_top');
       if (saved) {
@@ -114,26 +115,20 @@ export const FloatingNotificationBadge: React.FC<FloatingNotificationBadgeProps>
     return () => window.removeEventListener('resize', onResize);
   }, []);
 
-  // Only render when there is an active unread notification
-  if (!unreadCount || unreadCount <= 0) {
-    return null;
-  }
-
+  // Position default around middle-lower right edge like the Q-Bank screenshot
   return (
     <aside
       aria-label="نشانگر یادآوری‌ها و اعلانات"
       style={{ top: `${topPos}px` }}
-      className={`fixed right-0 z-40 select-none touch-none transition-shadow ${
+      className={`fixed right-0 z-40 select-none touch-none transition-transform duration-150 ${
         isDragging ? 'scale-105 opacity-95 cursor-grabbing' : 'cursor-grab'
       }`}
     >
       {/* 
-        iOS 27 Half-Pill Floating Edge Tab:
-        - Width increased by 1/3: w-7 (28px, hugs right screen border)
-        - Height exactly doubled: h-16 (64px) for premium ergonomics and visibility
-        - Tactile grip ridges & ringing swinging bell
-        - Smooth vertical drag & drop with touch or mouse
-        - Tap opens the slide-out drawer
+        Exact Q-Bank Right-Edge S-Curved Notification Tab (from Screenshot 3 & 5):
+        - Smooth concave top & bottom S-curves blending seamlessly into the right bezel
+        - Realistic Bell with neon-lime clapper & pulsing red notification dot
+        - Supports vertical drag-and-drop and 1-tap slide-out Notification Drawer
       */}
       <div
         onTouchStart={(e) => {
@@ -146,31 +141,55 @@ export const FloatingNotificationBadge: React.FC<FloatingNotificationBadgeProps>
           handleTouchEnd();
         }}
         onMouseDown={handleMouseDown}
-        className="relative flex flex-col items-center justify-between bg-emerald-600/95 hover:bg-emerald-700 border-y border-l border-emerald-400 rounded-l-2xl shadow-[-3px_4px_16px_rgba(5,150,105,0.45)] backdrop-blur-md w-7 h-16 py-2 group active:scale-95 transition-all cursor-pointer"
-        title="بکشید تا بالا و پایین جابجا شود · لمس کنید تا باز شود"
+        className="relative w-[38px] h-[88px] flex items-center justify-center group active:scale-95 transition-transform cursor-pointer"
+        style={{ filter: 'drop-shadow(-4px 4px 12px rgba(15, 23, 42, 0.12))' }}
+        title="باز کردن کشوی اعلانات و یادآوری‌ها (قابل جابجایی عمودی)"
       >
-        {/* Subtle glow on edge */}
-        <div className="absolute inset-0 bg-white/20 rounded-l-2xl blur-[1px] pointer-events-none group-hover:bg-white/30 transition-colors" />
+        {/* Q-Bank Authentic S-Curve Right-Edge Tab SVG */}
+        <svg
+          className="absolute inset-0 w-full h-full pointer-events-none"
+          viewBox="0 0 38 88"
+          fill="none"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <path
+            d="M 38 0 C 38 14, 2 14, 2 30 L 2 58 C 2 74, 38 74, 38 88 Z"
+            fill="rgba(255, 255, 255, 0.96)"
+            stroke="rgba(203, 213, 225, 0.9)"
+            strokeWidth="1.5"
+          />
+        </svg>
 
-        {/* Top Mini Drag Ridge Indicator */}
-        <div className="flex flex-col gap-0.5 items-center justify-center opacity-70 group-hover:opacity-100 transition-opacity">
-          <span className="w-2.5 h-0.5 rounded-full bg-white/70" />
-          <span className="w-1.5 h-0.5 rounded-full bg-white/50" />
+        {/* Realistic Q-Bank Bell Icon + Neon Lime Clapper + Red Dot */}
+        <div className="relative z-10 flex items-center justify-center pl-1.5">
+          <div className="relative animate-bell-ring">
+            <svg width="22" height="24" viewBox="0 0 24 26" fill="none" xmlns="http://www.w3.org/2000/svg">
+              {/* Neon Lime Clapper at Bottom */}
+              <path
+                d="M9.5 20.5C9.5 21.8807 10.6193 23 12 23C13.3807 23 14.5 21.8807 14.5 20.5H9.5Z"
+                fill="#84cc16"
+              />
+              {/* Dark Bell Body */}
+              <path
+                d="M12 3C8.68629 3 6 5.68629 6 9V14.5L4.29289 16.2071C3.66293 16.8371 4.1091 17.9142 5 17.9142H19C19.8909 17.9142 20.3371 16.8371 19.7071 16.2071L18 14.5V9C18 5.68629 15.3137 3 12 3Z"
+                fill="#0f172a"
+              />
+              {/* Subtle Center Bell Slot Highlight */}
+              <rect x="11.2" y="10" width="1.6" height="4" rx="0.8" fill="#a3e635" />
+            </svg>
+
+            {/* Red Notification Dot / Counter on Top-Right of Bell */}
+            {unreadCount > 0 ? (
+              <span className="absolute -top-1 -right-1 flex items-center justify-center min-w-[13px] h-[13px] px-0.5 bg-rose-500 border-[1.5px] border-white text-[8px] font-black text-white rounded-full shadow-2xs font-mono leading-none">
+                {toPersianDigits(unreadCount)}
+              </span>
+            ) : (
+              <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-rose-500 border-[1.5px] border-white rounded-full" />
+            )}
+          </div>
         </div>
-
-        {/* Realistic Ringing Bell Icon */}
-        <div className="relative flex items-center justify-center z-10 pl-0.5 my-auto">
-          <Bell className="w-4 h-4 text-white stroke-[2.4] animate-bell-ring drop-shadow-xs" />
-
-          {/* Pulsing Unread Counter Dot Badge */}
-          <span className="absolute -top-2.5 -left-2.5 flex items-center justify-center min-w-[15px] h-[15px] px-1 bg-red-500 border border-white text-[8.5px] font-black text-white rounded-full shadow-xs font-mono leading-none">
-            {toPersianDigits(unreadCount)}
-          </span>
-        </div>
-
-        {/* Bottom Mini Grip Dot */}
-        <div className="w-1 h-1 rounded-full bg-white/60 group-hover:bg-white transition-colors" />
       </div>
     </aside>
   );
 };
+

@@ -1,22 +1,40 @@
 {
+  "id": "/",
   "name": "مینادنتال - مدیریت یکپارچه دندانپزشکی",
   "short_name": "مینادنتال",
-  "description": "سامانه فوق استاندارد مدیریت کلینیک دندانپزشکی مینادنتال با چارت پالمر، لابراتوار، ایمپلنت و چک صیادی",
+  "lang": "fa",
+  "dir": "rtl",
+  "description": "سامانه فوق استاندارد مدیریت کلینیک دندانپزشکی مینادنتال با چارت پالمر، لابراتوار، ایمپلنت، چک صیادی و آپدیت خودکار OTA",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone", "minimal-ui"],
+  "prefer_related_applications": false,
   "background_color": "#faf5ff",
   "theme_color": "#8b5cf6",
-  "orientation": "portrait-primary",
+  "orientation": "any",
   "icons": [
     {
-      "src": "/icon-512.png",
-      "sizes": "512x512",
+      "src": "/pwa-192x192.png",
+      "sizes": "192x192",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
     },
     {
-      "src": "/logo.png",
-      "sizes": "192x192 512x512",
+      "src": "/pwa-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/pwa-maskable-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/apple-touch-icon.png",
+      "sizes": "180x180",
       "type": "image/png",
       "purpose": "any"
     },
@@ -24,7 +42,28 @@
       "src": "/icon.svg",
       "sizes": "192x192 512x512",
       "type": "image/svg+xml",
-      "purpose": "any maskable"
+      "purpose": "any"
+    }
+  ],
+  "categories": ["medical", "productivity", "business"],
+  "shortcuts": [
+    {
+      "name": "پذیرش و پرونده بیماران",
+      "short_name": "بیماران",
+      "url": "/?view=patients",
+      "icons": [{ "src": "/pwa-192x192.png", "sizes": "192x192", "type": "image/png" }]
+    },
+    {
+      "name": "نوبت‌دهی و تقویم ایرانی",
+      "short_name": "نوبت‌دهی",
+      "url": "/?view=appointments",
+      "icons": [{ "src": "/pwa-192x192.png", "sizes": "192x192", "type": "image/png" }]
+    },
+    {
+      "name": "مالی، چک صیادی و اقساط",
+      "short_name": "مالی",
+      "url": "/?view=financial",
+      "icons": [{ "src": "/pwa-192x192.png", "sizes": "192x192", "type": "image/png" }]
     }
   ]
 }

@@ -171,28 +171,30 @@ export const DashboardPatientSearch: React.FC<DashboardPatientSearchProps> = ({
   const isDropdownOpen = isFocused && (query.trim().length > 0 || activeFilter !== 'all');
 
   return (
-    <div ref={containerRef} className="relative w-full z-30 select-none">
-      {/* Main Persistent Search Card - Patient Dashboard Header Search Bar */}
-      <div className="w-full bg-white/95 backdrop-blur-md rounded-[22px] p-2 sm:p-2.5 border border-slate-200/90 shadow-2xs transition-all duration-200 focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-500/20">
-        
+    <div ref={containerRef} className="relative w-full z-30">
+      {/* Main Persistent Search Card - Sleek iOS/Android Search + Quick Filter Chips */}
+      <div className="w-full bg-white rounded-[20px] p-2 sm:p-2.5 border border-slate-200/95 shadow-[0_2px_10px_rgba(15,23,42,0.03)] transition-all duration-200 focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-500/20">
+
         {/* Input Bar with Embedded Quick Status */}
         <div className="relative flex items-center">
           {/* Search Icon */}
           <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400 flex items-center justify-center">
-            <Search className="w-4 h-4 text-emerald-600 stroke-[2.4]" />
+            <Search className="w-4 h-4 text-emerald-600 stroke-[2.3]" />
           </div>
 
           {/* Search Input */}
           <input
             ref={inputRef}
             type="text"
+            inputMode={searchScope === 'phone' ? 'tel' : searchScope === 'file' ? 'numeric' : 'search'}
+            enterKeyHint="search"
             value={query}
             onChange={(e) => {
               setQuery(e.target.value);
               setIsFocused(true);
             }}
-            onFocus={() => {
-              triggerHaptic('light');
+            onFocus={(e) => {
+              e.stopPropagation();
               setIsFocused(true);
             }}
             onKeyDown={(e) => {
@@ -201,12 +203,12 @@ export const DashboardPatientSearch: React.FC<DashboardPatientSearchProps> = ({
               }
             }}
             placeholder={
-              searchScope === 'name' ? 'فیلتر بر اساس نام بیمار (مثلاً: امیری، محمدی)...' :
-              searchScope === 'phone' ? 'فیلتر بر اساس شماره تماس (مثلاً: ۰۹۱۲ یا ۹۸۷۶)...' :
-              searchScope === 'file' ? 'فیلتر بر اساس شماره پرونده (مثلاً: ۱۰۲۴ یا ۵۶)...' :
-              'جستجوی بلادرنگ بیمار بر اساس نام، شماره پرونده یا شماره تماس...'
+              searchScope === 'name' ? 'جستجو با نام بیمار...' :
+              searchScope === 'phone' ? 'جستجو با شماره موبایل...' :
+              searchScope === 'file' ? 'جستجو با شماره پرونده...' :
+              'جستجوی پرونده بیمار (نام، شماره پرونده، موبایل)...'
             }
-            className="w-full bg-slate-50 hover:bg-slate-100/70 focus:bg-white text-slate-800 placeholder-slate-400 text-xs sm:text-[13px] font-medium pr-9 pl-9 py-2 rounded-xl border border-slate-200/90 focus:border-emerald-500 focus:outline-none transition-all shadow-inner"
+            className="w-full bg-slate-50 hover:bg-slate-100/70 focus:bg-white text-slate-800 placeholder:text-slate-400 text-[12px] sm:text-[13px] font-medium pr-9 pl-9 py-2 rounded-xl border border-slate-200/90 focus:border-emerald-500 focus:outline-none transition-all select-text"
             dir="rtl"
             autoComplete="off"
             spellCheck="false"
@@ -226,138 +228,138 @@ export const DashboardPatientSearch: React.FC<DashboardPatientSearchProps> = ({
             <button
               onClick={handleClear}
               type="button"
-              className="absolute left-2.5 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full bg-slate-200 hover:bg-slate-300 text-slate-600 flex items-center justify-center transition-colors active:scale-95"
+              className="absolute left-2.5 top-1/2 -translate-y-1/2 w-5.5 h-5.5 rounded-full bg-slate-200 hover:bg-slate-300 text-slate-600 flex items-center justify-center transition-colors active:scale-95 cursor-pointer"
               title="پاک کردن جستجو"
             >
-              <X className="w-3.5 h-3.5 stroke-[2.5]" />
+              <X className="w-3 h-3 stroke-[2.5]" />
             </button>
           )}
         </div>
 
-        {/* Real-Time Filter Scope Selector Bar (Name / Phone / File Number / All) */}
-        <div className="flex items-center gap-1 mt-1.5 pb-1 border-b border-slate-100 text-[10px]">
-          <span className="text-[10px] font-bold text-slate-400 shrink-0 ml-1 flex items-center gap-0.5">
-            <Filter className="w-2.5 h-2.5" />
-            فیلتر در:
-          </span>
+        {/* Real-Time Filter Scope Selector Bar (Shown when focused or typing) */}
+        {(isFocused || query.length > 0) && (
+          <div className="flex items-center gap-1 mt-1.5 pb-1 border-b border-slate-100 text-[10.5px] animate-in fade-in duration-150">
+            <span className="text-[10px] font-bold text-slate-400 shrink-0 ml-1 flex items-center gap-0.5">
+              <Filter className="w-2.5 h-2.5" />
+              فیلتر:
+            </span>
 
-          {/* All Fields */}
-          <button
-            type="button"
-            onClick={() => handleScopeClick('all')}
-            className={`px-2 py-0.5 rounded-md font-bold transition-all active:scale-95 ${
-              searchScope === 'all'
-                ? 'bg-slate-900 text-white shadow-2xs'
-                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-            }`}
-          >
-            همه فیلدها
-          </button>
+            <button
+              type="button"
+              onClick={() => handleScopeClick('all')}
+              className={`px-2 py-0.5 rounded-md font-bold transition-all active:scale-95 ${
+                searchScope === 'all'
+                  ? 'bg-sky-600 text-white shadow-2xs'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              }`}
+            >
+              همه
+            </button>
 
-          {/* By Name */}
-          <button
-            type="button"
-            onClick={() => handleScopeClick('name')}
-            className={`px-2 py-0.5 rounded-md font-bold transition-all active:scale-95 flex items-center gap-0.5 ${
-              searchScope === 'name'
-                ? 'bg-emerald-600 text-white shadow-2xs'
-                : 'bg-emerald-50 text-emerald-800 border border-emerald-200/60 hover:bg-emerald-100'
-            }`}
-          >
-            <Contact2 className="w-2.5 h-2.5" />
-            <span>نام بیمار</span>
-          </button>
+            <button
+              type="button"
+              onClick={() => handleScopeClick('name')}
+              className={`px-2 py-0.5 rounded-md font-bold transition-all active:scale-95 flex items-center gap-0.5 ${
+                searchScope === 'name'
+                  ? 'bg-emerald-600 text-white shadow-2xs'
+                  : 'bg-emerald-50 text-emerald-800 border border-emerald-200/60 hover:bg-emerald-100'
+              }`}
+            >
+              <Contact2 className="w-2.5 h-2.5" />
+              <span>نام بیمار</span>
+            </button>
 
-          {/* By Phone */}
-          <button
-            type="button"
-            onClick={() => handleScopeClick('phone')}
-            className={`px-2 py-0.5 rounded-md font-bold transition-all active:scale-95 flex items-center gap-0.5 ${
-              searchScope === 'phone'
-                ? 'bg-sky-600 text-white shadow-2xs'
-                : 'bg-sky-50 text-sky-800 border border-sky-200/60 hover:bg-sky-100'
-            }`}
-          >
-            <Phone className="w-2.5 h-2.5" />
-            <span>شماره تماس</span>
-          </button>
+            <button
+              type="button"
+              onClick={() => handleScopeClick('phone')}
+              className={`px-2 py-0.5 rounded-md font-bold transition-all active:scale-95 flex items-center gap-0.5 ${
+                searchScope === 'phone'
+                  ? 'bg-sky-600 text-white shadow-2xs'
+                  : 'bg-sky-50 text-sky-800 border border-sky-200/60 hover:bg-sky-100'
+              }`}
+            >
+              <Phone className="w-2.5 h-2.5" />
+              <span>موبایل</span>
+            </button>
 
-          {/* By File Number */}
-          <button
-            type="button"
-            onClick={() => handleScopeClick('file')}
-            className={`px-2 py-0.5 rounded-md font-bold transition-all active:scale-95 flex items-center gap-0.5 ${
-              searchScope === 'file'
-                ? 'bg-purple-600 text-white shadow-2xs'
-                : 'bg-purple-50 text-purple-800 border border-purple-200/60 hover:bg-purple-100'
-            }`}
-          >
-            <Hash className="w-2.5 h-2.5" />
-            <span>شماره پرونده</span>
-          </button>
-        </div>
+            <button
+              type="button"
+              onClick={() => handleScopeClick('file')}
+              className={`px-2 py-0.5 rounded-md font-bold transition-all active:scale-95 flex items-center gap-0.5 ${
+                searchScope === 'file'
+                  ? 'bg-purple-600 text-white shadow-2xs'
+                  : 'bg-purple-50 text-purple-800 border border-purple-200/60 hover:bg-purple-100'
+              }`}
+            >
+              <Hash className="w-2.5 h-2.5" />
+              <span>شماره پرونده</span>
+            </button>
+          </div>
+        )}
 
-        {/* Quick Filter Category Chips (1-tap access) */}
-        <div className="flex items-center gap-1.5 mt-1.5 overflow-x-auto no-scrollbar pt-0.5 text-[10.5px]">
-          <button
-            onClick={() => handleFilterClick('all')}
-            className={`px-2.5 py-1 rounded-lg font-bold shrink-0 transition-all active:scale-95 ${
-              activeFilter === 'all' && !query
-                ? 'bg-emerald-600 text-white shadow-2xs'
-                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-            }`}
-          >
-            کل پرونده‌ها ({toPersianDigits(patients.length)})
-          </button>
+        {/* Quick Filter Category Chips (Revealed smoothly on focus/search for zero visual clutter at first glance) */}
+        {(isFocused || query.length > 0 || activeFilter !== 'all') && (
+          <div className="flex items-center gap-1.5 mt-1.5 overflow-x-auto no-scrollbar pt-0.5 text-[10.5px] animate-in fade-in duration-150">
+            <button type="button"
+              onClick={() => handleFilterClick('all')}
+              className={`px-2.5 py-1 rounded-lg font-bold shrink-0 transition-all active:scale-95 ${
+                activeFilter === 'all' && !query
+                  ? 'bg-emerald-600 text-white shadow-2xs'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              }`}
+            >
+              کل پرونده‌ها ({toPersianDigits(patients.length)})
+            </button>
 
-          <button
-            onClick={() => handleFilterClick('today')}
-            className={`px-2.5 py-1 rounded-lg font-bold shrink-0 transition-all active:scale-95 flex items-center gap-1 ${
-              activeFilter === 'today'
-                ? 'bg-amber-500 text-white shadow-2xs'
-                : 'bg-amber-50 text-amber-800 border border-amber-200/70 hover:bg-amber-100'
-            }`}
-          >
-            <Calendar className="w-3 h-3" />
-            <span>نوبت امروز</span>
-          </button>
+            <button type="button"
+              onClick={() => handleFilterClick('today')}
+              className={`px-2.5 py-1 rounded-lg font-bold shrink-0 transition-all active:scale-95 flex items-center gap-1 ${
+                activeFilter === 'today'
+                  ? 'bg-amber-500 text-white shadow-2xs'
+                  : 'bg-amber-50 text-amber-800 border border-amber-200/70 hover:bg-amber-100'
+              }`}
+            >
+              <Calendar className="w-3 h-3" />
+              <span>نوبت امروز</span>
+            </button>
 
-          <button
-            onClick={() => handleFilterClick('debtors')}
-            className={`px-2.5 py-1 rounded-lg font-bold shrink-0 transition-all active:scale-95 flex items-center gap-1 ${
-              activeFilter === 'debtors'
-                ? 'bg-rose-600 text-white shadow-2xs'
-                : 'bg-rose-50 text-rose-800 border border-rose-200/70 hover:bg-rose-100'
-            }`}
-          >
-            <AlertCircle className="w-3 h-3" />
-            <span>بدهکاران ({toPersianDigits(patients.filter(p => p.balance < 0).length)})</span>
-          </button>
+            <button type="button"
+              onClick={() => handleFilterClick('debtors')}
+              className={`px-2.5 py-1 rounded-lg font-bold shrink-0 transition-all active:scale-95 flex items-center gap-1 ${
+                activeFilter === 'debtors'
+                  ? 'bg-rose-600 text-white shadow-2xs'
+                  : 'bg-rose-50 text-rose-800 border border-rose-200/70 hover:bg-rose-100'
+              }`}
+            >
+              <AlertCircle className="w-3 h-3" />
+              <span>بدهکاران ({toPersianDigits(patients.filter(p => p.balance < 0).length)})</span>
+            </button>
 
-          <button
-            onClick={() => handleFilterClick('lab')}
-            className={`px-2.5 py-1 rounded-lg font-bold shrink-0 transition-all active:scale-95 flex items-center gap-1 ${
-              activeFilter === 'lab'
-                ? 'bg-sky-600 text-white shadow-2xs'
-                : 'bg-sky-50 text-sky-800 border border-sky-200/70 hover:bg-sky-100'
-            }`}
-          >
-            <Layers className="w-3 h-3" />
-            <span>لابراتوار فعال</span>
-          </button>
+            <button type="button"
+              onClick={() => handleFilterClick('lab')}
+              className={`px-2.5 py-1 rounded-lg font-bold shrink-0 transition-all active:scale-95 flex items-center gap-1 ${
+                activeFilter === 'lab'
+                  ? 'bg-sky-600 text-white shadow-2xs'
+                  : 'bg-sky-50 text-sky-800 border border-sky-200/70 hover:bg-sky-100'
+              }`}
+            >
+              <Layers className="w-3 h-3" />
+              <span>لابراتوار فعال</span>
+            </button>
 
-          <button
-            onClick={() => handleFilterClick('implant')}
-            className={`px-2.5 py-1 rounded-lg font-bold shrink-0 transition-all active:scale-95 flex items-center gap-1 ${
-              activeFilter === 'implant'
-                ? 'bg-purple-600 text-white shadow-2xs'
-                : 'bg-purple-50 text-purple-800 border border-purple-200/70 hover:bg-purple-100'
-            }`}
-          >
-            <Activity className="w-3 h-3" />
-            <span>جراحی ایمپلنت</span>
-          </button>
-        </div>
+            <button type="button"
+              onClick={() => handleFilterClick('implant')}
+              className={`px-2.5 py-1 rounded-lg font-bold shrink-0 transition-all active:scale-95 flex items-center gap-1 ${
+                activeFilter === 'implant'
+                  ? 'bg-purple-600 text-white shadow-2xs'
+                  : 'bg-purple-50 text-purple-800 border border-purple-200/70 hover:bg-purple-100'
+              }`}
+            >
+              <Activity className="w-3 h-3" />
+              <span>جراحی ایمپلنت</span>
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Instant Search-as-You-Type Dropdown Results Panel */}
@@ -371,9 +373,12 @@ export const DashboardPatientSearch: React.FC<DashboardPatientSearchProps> = ({
               <span>نتایج لحظه‌ای ({toPersianDigits(filteredPatients.length)} مورد):</span>
             </span>
 
-            <button
-              onClick={() => setIsFocused(false)}
-              className="text-[11px] text-slate-500 hover:text-slate-800 font-bold"
+            <button type="button"
+              onClick={() => {
+                triggerHaptic('light');
+                setIsFocused(false);
+              }}
+              className="text-[11px] text-slate-500 hover:text-slate-800 font-bold cursor-pointer"
             >
               بستن لیست
             </button>
@@ -455,15 +460,16 @@ export const DashboardPatientSearch: React.FC<DashboardPatientSearchProps> = ({
                           e.stopPropagation();
                           triggerHaptic('light');
                         }}
-                        className="w-7 h-7 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 flex items-center justify-center transition-all active:scale-90"
+                        aria-label={`تماس با ${patient.fullName}`}
+                        className="min-w-[38px] min-h-[38px] rounded-[10px] bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 flex items-center justify-center transition-all active:scale-90"
                         title={`تماس با ${patient.fullName}`}
                       >
-                        <PhoneCall className="w-3.5 h-3.5" />
+                        <PhoneCall className="w-4 h-4" />
                       </a>
 
                       {/* Palmer Chart */}
                       {onOpenPalmerChart && (
-                        <button
+                        <button type="button"
                           onClick={() => {
                             triggerHaptic('medium');
                             setIsFocused(false);
@@ -479,7 +485,7 @@ export const DashboardPatientSearch: React.FC<DashboardPatientSearchProps> = ({
 
                       {/* Schedule Appointment */}
                       {onOpenAppointment && (
-                        <button
+                        <button type="button"
                           onClick={() => {
                             triggerHaptic('medium');
                             setIsFocused(false);
@@ -494,7 +500,7 @@ export const DashboardPatientSearch: React.FC<DashboardPatientSearchProps> = ({
                       )}
 
                       {/* Full File Modal */}
-                      <button
+                      <button type="button"
                         onClick={() => handlePatientClick(patient)}
                         className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10.5px] flex items-center gap-1 active:scale-95 transition-all shadow-2xs"
                         title="مشاهده پرونده کامل، مالی و درمان‌ها"
@@ -522,7 +528,7 @@ export const DashboardPatientSearch: React.FC<DashboardPatientSearchProps> = ({
                 </div>
 
                 {onQuickAdmission && (
-                  <button
+                  <button type="button"
                     onClick={() => {
                       triggerHaptic('heavy');
                       setIsFocused(false);

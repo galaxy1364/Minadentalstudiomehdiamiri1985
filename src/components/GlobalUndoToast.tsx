@@ -84,7 +84,7 @@ export const GlobalUndoToast: React.FC = () => {
 
           <div className="flex items-center gap-1.5 shrink-0">
             {!undoSuccess && (
-              <button
+              <button type="button"
                 onClick={handleUndo}
                 className="py-1 px-3 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 text-xs font-black flex items-center gap-1 active:scale-95 transition-all shadow-md"
               >
@@ -92,12 +92,12 @@ export const GlobalUndoToast: React.FC = () => {
                 <span>واگرد</span>
               </button>
             )}
-            <button
+            <button type="button"
               onClick={() => undoManager.dismiss()}
-              className="w-7 h-7 rounded-xl hover:bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center active:scale-95 transition-all"
+              className="min-w-[38px] min-h-[38px] rounded-[12px] hover:bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center active:scale-95 transition-all"
               aria-label="بستن"
             >
-              <X className="w-3.5 h-3.5" />
+              <X className="w-4 h-4" />
             </button>
           </div>
         </div>

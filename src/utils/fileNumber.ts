@@ -38,11 +38,20 @@ export function parseFileNumber(val: string): ParsedFileNumber {
 /**
  * Increments the given file number by 1, preserving prefix/suffix
  */
-export function getNextFileNumber(currentOrLastVal?: string): string {
-  let valToUse = currentOrLastVal;
+export function getNextFileNumber(currentOrLastVal?: string | { fileNumber: string }[]): string {
+  let valToUse: string | undefined;
+  if (Array.isArray(currentOrLastVal)) {
+    valToUse = getLatestFileNumber(currentOrLastVal);
+  } else {
+    valToUse = currentOrLastVal;
+  }
   if (!valToUse) {
     try {
-      valToUse = localStorage.getItem('minadental_last_file_number') || 'D-1051';
+      if (typeof localStorage !== 'undefined') {
+        valToUse = localStorage.getItem('minadental_last_file_number') || 'D-1051';
+      } else {
+        valToUse = 'D-1051';
+      }
     } catch {
       valToUse = 'D-1051';
     }
@@ -59,9 +68,11 @@ const STORAGE_KEY = 'minadental_last_file_number';
  */
 export function getLatestFileNumber(patients: { fileNumber: string }[]): string {
   try {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved && saved.trim()) {
-      return saved.trim();
+    if (typeof localStorage !== 'undefined') {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved && saved.trim()) {
+        return saved.trim();
+      }
     }
   } catch (e) {
     console.error(e);
@@ -93,7 +104,7 @@ export function getLatestFileNumber(patients: { fileNumber: string }[]): string 
  */
 export function recordLastFileNumber(fileNumber: string): void {
   try {
-    if (fileNumber && fileNumber.trim()) {
+    if (typeof localStorage !== 'undefined' && fileNumber && fileNumber.trim()) {
       localStorage.setItem(STORAGE_KEY, fileNumber.trim());
     }
   } catch (e) {

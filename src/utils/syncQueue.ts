@@ -5,6 +5,8 @@
  * Guarantees zero-latency, order-preserving state dispatch and atomic UI updates without page reload.
  */
 
+import { eccLogger } from './eccLogger';
+
 export type ConnectionStatus = 'connected' | 'connecting' | 'reconnecting' | 'disconnected';
 
 export interface SyncMessage<T = any> {
@@ -28,6 +30,8 @@ export class StateSyncMessageQueue {
   private statusHandlers: Set<ConnectionStatusHandler> = new Set();
   private processedCount: number = 0;
   private lastProcessedTimestamp: number = 0;
+  private lastCommitTimestamp: number = Date.now();
+  private commitListeners: Set<(timestamp: number) => void> = new Set();
   
   // Reconnection & Resilience
   private connectionStatus: ConnectionStatus = 'connected';
@@ -81,6 +85,39 @@ export class StateSyncMessageQueue {
     return () => {
       this.statusHandlers.delete(handler);
     };
+  }
+
+  /**
+   * Subscribe to cloud commit success events
+   */
+  public getLastCommitFormatted(): string {
+    return new Date(this.lastCommitTimestamp).toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' });
+  }
+
+  public onCommit(handler: (timestamp: number) => void): () => void {
+    this.commitListeners.add(handler);
+    try {
+      handler(this.lastCommitTimestamp);
+    } catch (e) {
+      console.error('Error notifying initial commit listener:', e);
+    }
+    return () => {
+      this.commitListeners.delete(handler);
+    };
+  }
+
+  public notifyCommitSuccess(timestamp: number = Date.now()): void {
+    this.lastCommitTimestamp = timestamp;
+    this.commitListeners.forEach(h => {
+      try {
+        h(timestamp);
+      } catch (err) {
+        console.error('Commit listener error:', err);
+      }
+    });
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('minadental:cloud-commit-success', { detail: { timestamp } }));
+    }
   }
 
   /**
@@ -265,13 +302,20 @@ export class StateSyncMessageQueue {
         msg.processed = true;
         this.processedCount++;
         this.lastProcessedTimestamp = Date.now();
+        this.lastCommitTimestamp = Date.now();
 
         // Dispatch window event for external listening widgets
         if (typeof window !== 'undefined') {
           window.dispatchEvent(new CustomEvent('minadental:realtime-synced', {
             detail: msg
           }));
+          window.dispatchEvent(new CustomEvent('minadental:cloud-commit-success', {
+            detail: { timestamp: this.lastCommitTimestamp }
+          }));
         }
+        this.commitListeners.forEach(h => {
+          try { h(this.lastCommitTimestamp); } catch {}
+        });
       } catch (err) {
         console.error('StateSyncMessageQueue dispatch error:', err);
       }
@@ -291,9 +335,7 @@ export class StateSyncMessageQueue {
   }
 
   private log(...args: any[]) {
-    if (typeof console !== 'undefined') {
-      console.log('[StateSyncQueue]', ...args);
-    }
+    eccLogger.debug('StateSyncQueue', ...args);
   }
 
   public getStats() {

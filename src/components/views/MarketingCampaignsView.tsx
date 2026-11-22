@@ -1,223 +1,572 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
+import * as d3 from 'd3';
 import { 
-  Megaphone, Sparkles, Gift, Users, Send, 
-  Search, Plus, CheckCircle2, Calendar, Percent, 
-  Smartphone, Share2, Tag, Trophy, ArrowUpRight,
-  SlidersHorizontal, Check, X, ChevronDown, ChevronUp,
-  Heart, Copy, Eye, BarChart3, AlertCircle
+  Megaphone, Send, CheckCircle2, Plus, 
+  Gift, ChevronDown, ChevronUp, Search, X, Trash2, FolderOpen, Lock, MessageSquare,
+  BarChart3, BellRing, Download, PauseCircle, PlayCircle
 } from 'lucide-react';
 import { Patient } from '../../types/dental';
-import { toPersianDigits, formatToman, getCurrentPersianDate, getRelativePersianDate, getCurrentPersianMonthName } from '../../utils/jalali';
+import { toPersianDigits, toEnglishDigits, formatToman, getCurrentPersianDate, diffPersianDays } from '../../utils/jalali';
 import { useHapticFeedback } from '../../hooks/useHapticFeedback';
+import { getModuleHeaderCardClasses, getUnifiedChipClasses } from '../../utils/chipThemes';
+import { clinicalSmsService, SmsLogItem } from '../../services/smsService';
+import { syncEngine } from '../../services/syncEngine';
+import { actionFeedback } from '../../utils/actionFeedback';
+import { scheduleEntityReminder } from '../../services/reminderNotificationService';
 
 interface MarketingCampaignsViewProps {
   patients: Patient[];
-  onOpenPatientFile?: (patient: Patient) => void;
+  onOpenPatientFile?: (patient: Patient, tab?: any) => void;
+  isManager?: boolean;
 }
 
-interface Campaign {
+type CampaignSegment = 'all' | 'recall_6m' | 'open_treatment' | 'vip_settled';
+
+interface CampaignItem {
   id: string;
   title: string;
   targetAudience: string;
+  targetSegment?: CampaignSegment;
   audienceCount: number;
   discountPercent: number;
-  promoCode: string;
-  smsText: string;
-  startDate: string;
-  endDate: string;
-  status: 'active' | 'scheduled' | 'ended';
-  convertedCount: number;
-  revenueGenerated: number;
+  messageTemplate: string;
+  status: 'active' | 'scheduled' | 'completed';
+  conversionCount: number;
+  estimatedRevenue: number;
+  color: string;
 }
 
-const DEFAULT_CAMPAIGNS: Campaign[] = [
-  {
-    id: 'camp-1',
-    title: 'جشنواره لبخند طلایی (کامپوزیت و لمینت زیبایی)',
-    targetAudience: 'بیماران متقاضی زیبایی و ونیر',
-    audienceCount: 340,
-    discountPercent: 15,
-    promoCode: 'MINA-SMILE',
-    smsText: 'سلام [نام] عزیز؛ جشنواره زیبایی مینادنتال آغاز شد! تا پایان ماه با ۱۵٪ تخفیف ویژه روی کامپوزیت IPS و لمینت سرامیکی در خدمتتان هستیم. رزرو وقت: ۰۲۱۸۸۲۲۳۳۴۴',
-    startDate: getRelativePersianDate(-15),
-    endDate: getRelativePersianDate(15),
-    status: 'active',
-    convertedCount: 28,
-    revenueGenerated: 84000000
-  },
-  {
-    id: 'camp-2',
-    title: `تبریک تولد بیماران متولد ${getCurrentPersianMonthName()}`,
-    targetAudience: 'متولدین ماه جاری',
-    audienceCount: 42,
-    discountPercent: 25,
-    promoCode: 'BDAY-GIFT',
-    smsText: 'زادروزتان فرخنده باد! هدیه کلینیک دندانپزشکی مینادنتال به شما: جرم‌گیری و بروساژ رایگان یا ۲۵٪ تخفیف کلیه خدمات تا پایان ماه تولدتان.',
-    startDate: getRelativePersianDate(-10),
-    endDate: getRelativePersianDate(20),
-    status: 'active',
-    convertedCount: 16,
-    revenueGenerated: 32000000
-  },
-  {
-    id: 'camp-3',
-    title: 'فراخوان بازگشت بیماران (چکاپ دوره‌ای ۶ ماهه)',
-    targetAudience: 'بیماران بدون مراجعه بیش از ۶ ماه',
-    audienceCount: 185,
-    discountPercent: 20,
-    promoCode: 'RECALL-20',
-    smsText: 'سلام [نام] گرامی؛ بیش از ۶ ماه از آخرین ویزیت دندانپزشکی شما سپری شده است. جهت پیشگیری از پوسیدگی و معاینه دوره‌ای رایگان با ما تماس بگیرید. کلینیک مینادنتال',
-    startDate: getRelativePersianDate(-45),
-    endDate: getRelativePersianDate(-5),
-    status: 'ended',
-    convertedCount: 44,
-    revenueGenerated: 58000000
-  }
-];
+const CAMPAIGNS_STORAGE_KEY = 'minadental_marketing_campaigns_v1';
+
+const SEGMENT_LABELS: Record<CampaignSegment, string> = {
+  recall_6m: 'بیمارانی که بیش از ۶ ماه مراجعه نداشته‌اند',
+  open_treatment: 'بیماران دارای طرح درمان باز در چارت پالمر',
+  vip_settled: 'بیماران خوش‌حساب و تسویه‌شده کلینیک',
+  all: 'همه بیماران ثبت‌شده در پرونده‌ها'
+};
 
 export const MarketingCampaignsView: React.FC<MarketingCampaignsViewProps> = ({
   patients,
-  onOpenPatientFile
+  onOpenPatientFile,
+  isManager = false
 }) => {
-  const { impactLight, impactHeavy, success, selection } = useHapticFeedback();
-
-  // Chips: campaigns | birthday | recall | club | banners
-  const [activeChip, setActiveChip] = useState<'campaigns' | 'birthday' | 'recall' | 'club' | 'banners'>('campaigns');
-
-  const [campaigns, setCampaigns] = useState<Campaign[]>(DEFAULT_CAMPAIGNS);
+  const { selection, impactLight, impactHeavy, success } = useHapticFeedback();
+  const [activeFilter, setActiveFilter] = useState<'all' | 'recall' | 'vip' | 'seasonal' | 'roi_funnel_d3' | 'sms_logs'>('all');
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [expandedCampaigns, setExpandedCampaigns] = useState<Set<string>>(() => new Set());
+  const [showNewModal, setShowNewModal] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [showNewCampaignModal, setShowNewCampaignModal] = useState(false);
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
-  const [collapsedCampaigns, setCollapsedCampaigns] = useState<Record<string, boolean>>({});
+  const [isSendingId, setIsSendingId] = useState<string | null>(null);
+  const [smsLogs, setSmsLogs] = useState<SmsLogItem[]>(() => clinicalSmsService.getLogs());
+  const [smsCredit, setSmsCredit] = useState<number>(() => clinicalSmsService.getSmsCredit());
+  const [quickSmsPatientId, setQuickSmsPatientId] = useState<string>(() => patients[0]?.id || '');
+  const [quickSmsText, setQuickSmsText] = useState<string>('مراجع گرامی، پیگیری وضعیت درمان دندانپزشکی شما در کلینیک مینادنتال.');
+  const [sendingQuickSms, setSendingQuickSms] = useState(false);
 
-  // Form states for new campaign
-  const [formTitle, setFormTitle] = useState('');
-  const [formAudience, setFormAudience] = useState('همه بیماران کلینیک');
-  const [formDiscount, setFormDiscount] = useState<number>(15);
-  const [formCode, setFormCode] = useState('');
-  const [formSmsText, setFormSmsText] = useState('');
-  const [formEndDate, setFormEndDate] = useState(getRelativePersianDate(30));
+  useEffect(() => {
+    if (!quickSmsPatientId && patients.length > 0) {
+      setQuickSmsPatientId(patients[0].id);
+    }
+  }, [patients, quickSmsPatientId]);
 
-  // Loyalty club points state
-  const [referralBonusToman, setReferralBonusToman] = useState<number>(500000);
-  const [cashbackPercent, setCashbackPercent] = useState<number>(5);
+  useEffect(() => {
+    const refreshSms = () => {
+      setSmsLogs([...clinicalSmsService.getLogs()]);
+      setSmsCredit(clinicalSmsService.getSmsCredit());
+    };
+    window.addEventListener('minadental:sms-updated', refreshSms);
+    return () => window.removeEventListener('minadental:sms-updated', refreshSms);
+  }, []);
 
-  const showToast = (msg: string) => {
-    setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 3200);
+  // Security & 2-step delete state
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [managerPinUnlocked, setManagerPinUnlocked] = useState(false);
+  const [showPinPrompt, setShowPinPrompt] = useState(false);
+  const [pinInput, setPinInput] = useState('');
+  const [pinError, setPinError] = useState(false);
+
+  const canManageCampaigns = isManager || managerPinUnlocked;
+
+  // New Campaign State
+  const [newTitle, setNewTitle] = useState('');
+  const [newDiscount, setNewDiscount] = useState('15');
+  const [newSegment, setNewSegment] = useState<CampaignSegment>('recall_6m');
+  const [newTemplate, setNewTemplate] = useState('مراجع گرامی {نام_بیمار}، به مناسبت جشنواره لبخند مینادنتال، ۱۵٪ هدیه ویژه خدمات زیبایی و ایمپلنت برای شما فعال شد.');
+
+  const defaultCampaigns: CampaignItem[] = [
+    {
+      id: 'cmp-1',
+      title: 'فراخوان چکاپ ۶ ماهه و جرم‌گیری (Recall)',
+      targetAudience: SEGMENT_LABELS.recall_6m,
+      targetSegment: 'recall_6m',
+      audienceCount: Math.max(patients.length, 1),
+      discountPercent: 20,
+      messageTemplate: 'سلام {نام_بیمار} عزیز؛ ۶ ماه از آخرین چکاپ دندانپزشکی شما در کلینیک دکتر مهدی امیری گذشته است. جهت معاینه رایگان و ۲۰٪ تخفیف جرم‌گیری تماس بگیرید.',
+      status: 'active',
+      conversionCount: 9,
+      estimatedRevenue: 34500000,
+      color: 'rose'
+    },
+    {
+      id: 'cmp-2',
+      title: 'طرح ویژه تکمیل درمان‌های نیمه‌تمام و ایمپلنت',
+      targetAudience: SEGMENT_LABELS.open_treatment,
+      targetSegment: 'open_treatment',
+      audienceCount: Math.max(patients.filter(p => p.activeTreatmentsCount > 0 || (p.implantCases?.length || 0) > 0).length, 1),
+      discountPercent: 10,
+      messageTemplate: 'مراجع ارجمند {نام_بیمار}؛ جهت تکمیل مراحل درمان ایمپلنت و پروتز خود با شرایط اقساطی ویژه بدون بهره، نوبت خود را رزرو فرمایید.',
+      status: 'active',
+      conversionCount: 6,
+      estimatedRevenue: 82000000,
+      color: 'purple'
+    },
+    {
+      id: 'cmp-3',
+      title: 'باشگاه مراجعین VIP و معرفی به دوستان',
+      targetAudience: SEGMENT_LABELS.vip_settled,
+      targetSegment: 'vip_settled',
+      audienceCount: Math.max(patients.filter(p => p.balance >= 0).length, 1),
+      discountPercent: 15,
+      messageTemplate: '{نام_بیمار} گرامی؛ از اعتماد شما به کلینیک مینادنتال سپاسگزاریم. کد هدیه ۱۵٪ خدمات زیبایی و بلیچینگ ویژه شما و خانواده محترم: MINA-VIP',
+      status: 'scheduled',
+      conversionCount: 4,
+      estimatedRevenue: 29000000,
+      color: 'amber'
+    }
+  ];
+
+  const [campaigns, setCampaigns] = useState<CampaignItem[]>(() => {
+    try {
+      const saved = localStorage.getItem(CAMPAIGNS_STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {}
+    return defaultCampaigns;
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(CAMPAIGNS_STORAGE_KEY, JSON.stringify(campaigns));
+    } catch {}
+  }, [campaigns]);
+
+  const todayPersian = getCurrentPersianDate();
+
+  const resolveSegment = (camp: CampaignItem): CampaignSegment => {
+    if (camp.targetSegment) return camp.targetSegment;
+    if (camp.id === 'cmp-1') return 'recall_6m';
+    if (camp.id === 'cmp-2') return 'open_treatment';
+    if (camp.id === 'cmp-3') return 'vip_settled';
+    return 'all';
   };
 
-  const toggleCampaignCollapse = (id: string) => {
+  const getCohortDetails = (camp: CampaignItem): { list: Patient[]; isFallback: boolean } => {
+    const seg = resolveSegment(camp);
+    if (seg === 'recall_6m') {
+      const stale = patients.filter(p => p.lastVisit && diffPersianDays(p.lastVisit, todayPersian) >= 180);
+      return stale.length > 0 ? { list: stale, isFallback: false } : { list: patients, isFallback: true };
+    }
+    if (seg === 'open_treatment') {
+      const openList = patients.filter(p =>
+        p.activeTreatmentsCount > 0 ||
+        (p.implantCases?.length || 0) > 0 ||
+        Object.values(p.teethConditions || {}).some(t => t.status === 'planned' || t.status === 'in_progress')
+      );
+      return openList.length > 0 ? { list: openList, isFallback: false } : { list: patients, isFallback: true };
+    }
+    if (seg === 'vip_settled') {
+      const vipList = patients.filter(p => p.balance >= 0);
+      return vipList.length > 0 ? { list: vipList, isFallback: false } : { list: patients, isFallback: true };
+    }
+    return { list: patients, isFallback: false };
+  };
+
+  const totalEstimatedRevenue = useMemo(
+    () => campaigns.reduce((sum, c) => sum + (c.estimatedRevenue || 0), 0),
+    [campaigns]
+  );
+
+  const totalConversions = useMemo(
+    () => campaigns.reduce((sum, c) => sum + (c.conversionCount || 0), 0),
+    [campaigns]
+  );
+
+  const handleScheduleCampaignReminder = (camp: CampaignItem, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    impactLight();
+    const { list: cohort } = getCohortDetails(camp);
+    const samplePatient = cohort[0] || patients[0];
+    scheduleEntityReminder({
+      sourceType: 'recall',
+      sourceId: camp.id,
+      patientId: samplePatient?.id,
+      patientName: samplePatient?.fullName || 'جامعه هدف کمپین',
+      patientPhone: samplePatient?.phone || '۰۹۱۲۳۴۵۶۷۸۹',
+      title: `یادآور اجرای کمپین «${camp.title}» (${toPersianDigits(cohort.length)} بیمار)`,
+      description: `تخفیف ${toPersianDigits(camp.discountPercent)}٪ · آورده پیش‌بینی‌شده: ${formatToman(camp.estimatedRevenue)}`,
+      targetDate: todayPersian,
+      targetTime: '۱۰:۳۰',
+      targetView: 'marketing',
+      config: {
+        enabled: true,
+        preset: '1d_before',
+        channels: ['in_app', 'phone_push'],
+        note: `پیگیری تلفنی و پیامکی مراجعین کمپین ${camp.title}`
+      }
+    });
+    success();
+    triggerToast(`یادآور هوشمند پیگیری کمپین «${camp.title}» در مرکز یادآورهای مطب ثبت شد.`);
+  };
+
+  // D3.js CRM Campaign ROI, Audience & Conversion Analytics
+  const d3CampaignAnalytics = useMemo(() => {
+    const items = campaigns.map((c) => {
+      const { list } = getCohortDetails(c);
+      return {
+        id: c.id,
+        shortTitle: c.title.slice(0, 18),
+        audience: Math.max(list.length, c.audienceCount || 1),
+        conversions: c.conversionCount || 0,
+        revenueM: Math.round((c.estimatedRevenue || 0) / 1_000_000)
+      };
+    });
+    const width = 350;
+    const height = 114;
+    const xScale = d3
+      .scaleBand<string>()
+      .domain(items.map((d) => d.id))
+      .range([26, width - 16])
+      .padding(0.32);
+    const maxRev = Math.max(10, d3.max(items, (d) => d.revenueM) || 85);
+    const yScale = d3.scaleLinear().domain([0, maxRev * 1.15]).range([height - 22, 12]);
+    return { items, width, height, xScale, yScale };
+  }, [campaigns, patients]);
+
+  const triggerToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(null), 4000);
+  };
+
+  const toggleExpand = (id: string) => {
     selection();
-    setCollapsedCampaigns(prev => ({
-      ...prev,
-      [id]: !prev[id]
-    }));
+    setExpandedCampaigns(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const handleToggleCampaignStatus = (camp: CampaignItem) => {
+    selection();
+    const nextStatus: CampaignItem['status'] = camp.status === 'active' ? 'scheduled' : 'active';
+    setCampaigns(prev => prev.map(c => (c.id === camp.id ? { ...c, status: nextStatus } : c)));
+    triggerToast(
+      nextStatus === 'active'
+        ? `کمپین «${camp.title}» فعال شد.`
+        : `کمپین «${camp.title}» در حالت زمان‌بندی/توقف قرار گرفت.`
+    );
+  };
+
+  const handleExportMarketingCsv = () => {
+    impactLight();
+    const headers = ['عنوان کمپین', 'گروه هدف', 'تعداد مخاطبین', 'درصد تخفیف', 'وضعیت', 'تعداد جذب', 'آورده پیش‌بینی‌شده (تومان)'];
+    const rows = campaigns.map(c => {
+      const { list } = getCohortDetails(c);
+      return [
+        c.title,
+        c.targetAudience,
+        String(list.length),
+        String(c.discountPercent),
+        c.status === 'active' ? 'فعال' : 'زمان‌بندی‌شده',
+        String(c.conversionCount),
+        String(c.estimatedRevenue)
+      ];
+    });
+    const csv = '\uFEFF' + [headers, ...rows].map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
+    try {
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `minadental-marketing-roi-${todayPersian.replace(/\//g, '-')}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch {}
+    success();
+    triggerToast('گزارش اکسل کمپین‌ها و بازگشت سرمایه (CSV) دانلود شد.');
+  };
+
+  const verifyManagerPin = () => {
+    let expectedPin = '1234';
+    try {
+      const stored = localStorage.getItem('minadental_manager_pin_v1');
+      if (stored && stored.trim()) expectedPin = toEnglishDigits(stored.trim());
+    } catch {}
+    if (toEnglishDigits(pinInput.trim()) === expectedPin) {
+      success();
+      setManagerPinUnlocked(true);
+      setShowPinPrompt(false);
+      setPinInput('');
+      setPinError(false);
+      triggerToast('دسترسی مدیریتی بازاریابی و حذف کمپین فعال شد.');
+    } else {
+      impactHeavy();
+      setPinError(true);
+    }
+  };
+
+  const handleSendCampaign = async (campaign: CampaignItem) => {
+    const { list: cohort } = getCohortDetails(campaign);
+    setIsSendingId(campaign.id);
+    const results = await Promise.allSettled(
+      cohort.slice(0, 15).map((p) =>
+        clinicalSmsService.sendPatternSms(
+          p.phone,
+          p.fullName,
+          'campaign_promo',
+          {
+            title: campaign.title,
+            discount: toPersianDigits(campaign.discountPercent),
+            customText: campaign.messageTemplate.replace(/\{نام_بیمار\}/g, p.fullName)
+          }
+        )
+      )
+    );
+    const sentOk = results.filter(r => r.status === 'fulfilled' && r.value.success).length;
+    setIsSendingId(null);
+    setCampaigns(prev =>
+      prev.map(c =>
+        c.id === campaign.id
+          ? {
+              ...c,
+              status: 'active',
+              audienceCount: cohort.length,
+              conversionCount: c.conversionCount + (sentOk > 0 ? 1 : 0)
+            }
+          : c
+      )
+    );
+    syncEngine.recordOfflineOrLiveMutation({
+      entity: 'patient',
+      action: 'UPSERT',
+      payload: { module: 'marketing_campaigns', campaignId: campaign.id, sentCount: cohort.length },
+      actorName: 'سیستم بازاریابی و CRM',
+      actorRole: 'admin',
+      platform: 'CRM & Campaigns',
+      eventType: 'CLOUD_BACKUP_SAVED',
+      title: `ارسال کمپین پیامکی (${campaign.title})`,
+      description: `پیامک کمپین با ${toPersianDigits(campaign.discountPercent)}٪ تخفیف برای ${toPersianDigits(cohort.length)} بیمار ارسال شد.`
+    });
+    success();
+    triggerToast(
+      sentOk > 0
+        ? `کمپین «${campaign.title}» با موفقیت به ${toPersianDigits(sentOk)} بیمار واقعی از طریق درگاه پیامک ارسال شد.`
+        : `کمپین «${campaign.title}» در صف ارسال پیامک ثبت گردید.`
+    );
+  };
+
+  const handleDeleteCampaign = (id: string, title: string) => {
+    if (!canManageCampaigns) {
+      impactHeavy();
+      setShowPinPrompt(true);
+      triggerToast('حذف کمپین تبلیغاتی نیازمند تایید پین مدیر مطب است.');
+      return;
+    }
+    if (confirmDeleteId !== id) {
+      impactLight();
+      setConfirmDeleteId(id);
+      return;
+    }
+    impactHeavy();
+    setCampaigns(prev => prev.filter(c => c.id !== id));
+    setConfirmDeleteId(null);
+    actionFeedback.recordSuccess({
+      title: `حذف کمپین تبلیغاتی «${title}»`,
+      subtitle: 'بایگانی توسط مدیر کلینیک',
+      diffAfter: 'حذف از لیست کمپین‌های فعال'
+    });
+    triggerToast(`کمپین «${title}» حذف شد.`);
   };
 
   const handleCreateCampaign = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formTitle) return;
+    if (!newTitle.trim()) return;
 
-    impactHeavy();
-    const newCamp: Campaign = {
-      id: `camp-${Date.now()}`,
-      title: formTitle,
-      targetAudience: formAudience,
-      audienceCount: Math.max(10, patients.length * 15),
-      discountPercent: formDiscount,
-      promoCode: formCode || `MINA-${Math.floor(1000 + Math.random() * 9000)}`,
-      smsText: formSmsText || `سلام؛ تخفیف ویژه کلینیک دندانپزشکی مینادنتال برای شما به مناسبت ${formTitle}. کد: ${formCode}`,
-      startDate: getCurrentPersianDate(),
-      endDate: formEndDate,
+    const cohortSize = getCohortDetails({
+      id: 'draft',
+      title: newTitle,
+      targetAudience: SEGMENT_LABELS[newSegment],
+      targetSegment: newSegment,
+      audienceCount: patients.length,
+      discountPercent: Number(newDiscount) || 10,
+      messageTemplate: newTemplate,
       status: 'active',
-      convertedCount: 0,
-      revenueGenerated: 0
+      conversionCount: 0,
+      estimatedRevenue: 15000000,
+      color: 'emerald'
+    }).list.length;
+
+    const created: CampaignItem = {
+      id: `cmp-${Date.now()}`,
+      title: newTitle.trim(),
+      targetAudience: SEGMENT_LABELS[newSegment],
+      targetSegment: newSegment,
+      audienceCount: cohortSize,
+      discountPercent: Number(newDiscount) || 10,
+      messageTemplate: newTemplate,
+      status: 'active',
+      conversionCount: 0,
+      estimatedRevenue: cohortSize * 3_500_000,
+      color: 'emerald'
     };
 
-    setCampaigns([newCamp, ...campaigns]);
+    setCampaigns([created, ...campaigns]);
+    syncEngine.recordOfflineOrLiveMutation({
+      entity: 'patient',
+      action: 'UPSERT',
+      payload: { module: 'marketing_campaigns', campaignId: created.id },
+      actorName: 'دکتر مهدی امیری',
+      actorRole: 'admin',
+      platform: 'CRM & Campaigns',
+      eventType: 'CLOUD_BACKUP_SAVED',
+      title: `ایجاد کمپین تبلیغاتی جدید (${created.title})`,
+      description: `کمپین با ${toPersianDigits(created.discountPercent)}٪ تخفیف برای ${toPersianDigits(cohortSize)} بیمار تعریف شد.`
+    });
+    actionFeedback.recordSuccess({
+      title: `کمپین «${created.title}» فعال شد`,
+      subtitle: `تخفیف: ${toPersianDigits(created.discountPercent)}٪ · جامعه هدف: ${toPersianDigits(cohortSize)} نفر`,
+      canUndo: false
+    });
+    setNewTitle('');
+    setShowNewModal(false);
     success();
-    showToast(`کمپین تبلیغاتی "${formTitle}" با موفقیت ایجاد و فعال شد.`);
-    setShowNewCampaignModal(false);
-    setFormTitle('');
-    setFormCode('');
-    setFormSmsText('');
+    triggerToast('کمپین تبلیغاتی جدید با موفقیت ایجاد و فعال شد.');
   };
 
+  const normalizeSearch = (val?: string) =>
+    toEnglishDigits(val || '').replace(/ي/g, 'ی').replace(/ك/g, 'ک').toLowerCase().trim();
+
   const filteredCampaigns = campaigns.filter(c => {
-    if (!searchQuery) return true;
-    return c.title.includes(searchQuery) || c.promoCode.includes(searchQuery) || c.targetAudience.includes(searchQuery);
+    const q = normalizeSearch(searchQuery);
+    const matchesSearch =
+      !q ||
+      normalizeSearch(c.title).includes(q) ||
+      normalizeSearch(c.targetAudience).includes(q) ||
+      normalizeSearch(c.messageTemplate).includes(q);
+    if (!matchesSearch) return false;
+    if (activeFilter === 'recall') return resolveSegment(c) === 'recall_6m' || c.id === 'cmp-1';
+    if (activeFilter === 'vip') return resolveSegment(c) === 'vip_settled' || c.id === 'cmp-3';
+    if (activeFilter === 'seasonal') return c.id !== 'cmp-1' && c.id !== 'cmp-3';
+    return true;
   });
 
   return (
-    <div className="pb-28 space-y-3">
-      {/* Toast Alert */}
+    <div dir="rtl" className="w-full max-w-full min-w-0 overflow-x-hidden pb-28 space-y-3 select-none">
+      {/* Toast Notification */}
       {toastMessage && (
-        <div className="fixed top-16 left-4 right-4 z-50 bg-[#24131e] border border-pink-400 text-white p-3 rounded-2xl shadow-xl flex items-center gap-2.5 animate-in fade-in slide-in-from-top-2">
-          <div className="w-6 h-6 rounded-full bg-pink-400 text-black flex items-center justify-center shrink-0">
-            <Check className="w-3.5 h-3.5 stroke-[3]" />
-          </div>
-          <span className="text-xs font-bold leading-tight">{toastMessage}</span>
+        <div className="fixed top-14 left-4 right-4 z-50 max-w-md mx-auto bg-rose-600 text-white px-4 py-3 rounded-2xl shadow-xl flex items-center gap-2 border border-rose-400 text-xs font-bold animate-in fade-in slide-in-from-top-3">
+          <CheckCircle2 className="w-4 h-4 shrink-0" />
+          <span>{toastMessage}</span>
         </div>
       )}
 
-      {/* Top Header Card */}
-      <div className="mx-2 mt-2">
-        <div className="bg-white rounded-[24px] p-3.5 shadow-sm border border-slate-100 space-y-3">
-          <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-            <div className="flex items-center gap-2.5">
-              <div className="w-9 h-9 rounded-2xl bg-pink-50 text-pink-600 flex items-center justify-center border border-pink-100">
-                <Megaphone className="w-5 h-5 stroke-[2.4]" />
+      {/* Top Module Header Card with Animated Search & Horizontal Scrollable Chips */}
+      <div className="relative z-20 mx-2 mt-2">
+        <div className={getModuleHeaderCardClasses('rose')}>
+          <div className="flex flex-wrap items-center justify-between gap-2 pb-2.5 border-b border-rose-200/70 min-w-0">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="w-9 h-9 rounded-[12px] bg-gradient-to-br from-rose-500 to-pink-600 text-white flex items-center justify-center shadow-xs shrink-0">
+                <Megaphone className="w-4 h-4 stroke-[2.25]" />
               </div>
-              <div>
-                <h3 className="font-black text-sm text-slate-800">تبلیغات</h3>
+              <div className="text-right min-w-0">
+                <h3 className="font-black text-sm text-slate-900 leading-none truncate">تبلیغات، باشگاه مشتریان و فراخوان</h3>
+                <span className="text-[10.5px] font-bold text-rose-800 mt-1 block tabular-nums truncate">
+                  بازگشت سرمایه کمپین‌ها: {formatToman(totalEstimatedRevenue)} · جذب کل: {toPersianDigits(totalConversions)} بیمار
+                </span>
               </div>
             </div>
 
-            <div className="flex items-center gap-1.5">
-              {/* Search Toggle */}
+            <div className="flex flex-wrap items-center gap-1.5 min-w-0">
+              {filteredCampaigns.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    selection();
+                    if (expandedCampaigns.size > 0) {
+                      setExpandedCampaigns(new Set());
+                    } else {
+                      setExpandedCampaigns(new Set(filteredCampaigns.map(c => c.id)));
+                    }
+                  }}
+                  className="min-h-[38px] px-2.5 rounded-[12px] bg-rose-50 hover:bg-rose-100 text-rose-800 border border-rose-200 text-[10.5px] font-black flex items-center gap-1 transition-all cursor-pointer active:scale-95"
+                >
+                  {expandedCampaigns.size > 0 ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                  <span className="hidden xs:inline">{expandedCampaigns.size > 0 ? 'جمع کردن همه' : 'باز کردن همه'}</span>
+                </button>
+              )}
               <button
+                type="button"
                 onClick={() => {
                   selection();
                   setSearchOpen(!searchOpen);
                 }}
-                className={`w-8 h-8 rounded-xl flex items-center justify-center transition-all ${
-                  searchOpen ? 'bg-pink-600 text-white shadow-2xs' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                className={`min-w-[40px] min-h-[40px] rounded-[12px] flex items-center justify-center transition-all cursor-pointer active:scale-95 ${
+                  searchOpen ? 'bg-rose-600 text-white shadow-2xs' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                 }`}
-                title="جستجوی کمپین"
+                title="جستجو در کمپین‌ها"
+                aria-label="جستجو در کمپین‌ها"
               >
-                <Search className="w-4 h-4" />
+                <Search className="w-4 h-4 stroke-[2.25]" />
               </button>
 
               <button
+                type="button"
+                onClick={handleExportMarketingCsv}
+                className="min-h-[40px] px-2.5 rounded-[12px] bg-white hover:bg-rose-50 text-rose-800 border border-rose-200 text-[11px] font-black flex items-center gap-1 transition-all cursor-pointer active:scale-95"
+                title="دانلود خروجی اکسل کمپین‌ها"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">اکسل CSV</span>
+              </button>
+
+              <button
+                type="button"
                 onClick={() => {
                   impactLight();
-                  setShowNewCampaignModal(true);
+                  setShowNewModal(!showNewModal);
                 }}
-                className="py-1.5 px-3 rounded-xl bg-pink-600 hover:bg-pink-700 text-white font-extrabold text-xs flex items-center gap-1 shadow-2xs active:scale-95 transition-all"
+                className="min-h-[40px] px-3 rounded-[12px] bg-gradient-to-l from-rose-600 to-pink-600 hover:from-rose-700 hover:to-pink-700 text-white text-xs font-black flex items-center gap-1 shadow-2xs active:scale-95 transition-all cursor-pointer"
               >
-                <Plus className="w-3.5 h-3.5 stroke-[3]" />
+                <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
                 <span>کمپین جدید</span>
               </button>
             </div>
           </div>
 
-          {/* Animated Search Bar */}
+          {/* Animated Expandable Search Bar */}
           {searchOpen && (
-            <div className="relative animate-in fade-in slide-in-from-top-1">
-              <Search className="w-3.5 h-3.5 text-slate-400 absolute right-3 top-2.5" />
+            <div className="relative animate-in slide-in-from-top-1 duration-150">
+              <Search className="w-3.5 h-3.5 text-rose-600 absolute right-3 top-2.5" />
               <input
+                aria-label="جستجوی عنوان کمپین یا متن پیامک"
                 type="text"
-                placeholder="جستجو در کمپین‌ها با عنوان یا کد تخفیف..."
+                autoFocus
+                placeholder="جستجوی عنوان کمپین، مخاطب هدف یا متن پیامک..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                autoFocus
-                className="w-full bg-slate-50 border border-pink-200 rounded-xl pr-8 pl-8 py-1.5 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-pink-500 shadow-2xs"
+                className="w-full bg-slate-50 border border-rose-200 rounded-xl pr-8 pl-8 py-1.5 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-rose-500 shadow-2xs"
               />
               {searchQuery && (
                 <button
+                  type="button"
                   onClick={() => setSearchQuery('')}
+                  aria-label="پاک کردن جستجو"
                   className="absolute left-2.5 top-2 text-slate-400 hover:text-slate-600"
                 >
                   <X className="w-3.5 h-3.5" />
@@ -226,518 +575,526 @@ export const MarketingCampaignsView: React.FC<MarketingCampaignsViewProps> = ({
             </div>
           )}
 
-          {/* Horizontal Scrollable Chips Navigation Bar (چیپ رونده چپ و راست با رنگ‌های اختصاصی) */}
-          <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
-            <button
-              onClick={() => {
-                selection();
-                setActiveChip('campaigns');
-              }}
-              className={`py-1.5 px-3 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 ${
-                activeChip === 'campaigns'
-                  ? 'bg-pink-600 text-white shadow-2xs'
-                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-              }`}
-            >
-              <Megaphone className="w-3.5 h-3.5" />
-              <span>جشنواره‌های پیامکی ({toPersianDigits(campaigns.length)})</span>
-            </button>
-
-            <button
-              onClick={() => {
-                selection();
-                setActiveChip('birthday');
-              }}
-              className={`py-1.5 px-3 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 ${
-                activeChip === 'birthday'
-                  ? 'bg-pink-600 text-white shadow-2xs'
-                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-              }`}
-            >
-              <Gift className="w-3.5 h-3.5" />
-              <span>هدیه تولد بیماران</span>
-            </button>
-
-            <button
-              onClick={() => {
-                selection();
-                setActiveChip('recall');
-              }}
-              className={`py-1.5 px-3 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 ${
-                activeChip === 'recall'
-                  ? 'bg-pink-600 text-white shadow-2xs'
-                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-              }`}
-            >
-              <Users className="w-3.5 h-3.5" />
-              <span>فراخوان بیماران غیرفعال</span>
-            </button>
-
-            <button
-              onClick={() => {
-                selection();
-                setActiveChip('club');
-              }}
-              className={`py-1.5 px-3 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 ${
-                activeChip === 'club'
-                  ? 'bg-pink-600 text-white shadow-2xs'
-                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-              }`}
-            >
-              <Trophy className="w-3.5 h-3.5" />
-              <span>باشگاه وفاداری و معرف</span>
-            </button>
-
-            <button
-              onClick={() => {
-                selection();
-                setActiveChip('banners');
-              }}
-              className={`py-1.5 px-3 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 ${
-                activeChip === 'banners'
-                  ? 'bg-pink-600 text-white shadow-2xs'
-                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-              }`}
-            >
-              <Share2 className="w-3.5 h-3.5" />
-              <span>بنرهای اینستاگرام / استوری</span>
-            </button>
+          {/* Horizontal Scrollable Chip Bar */}
+          <div role="tablist" aria-label="بخش‌های ماژول" className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
+            {[
+              { id: 'all', label: 'همه کمپین‌ها' },
+              { id: 'recall', label: 'فراخوان ۶ ماهه (Recall)' },
+              { id: 'vip', label: 'باشگاه مراجعین VIP' },
+              { id: 'seasonal', label: 'جشنواره‌های فصلی' },
+              { id: 'roi_funnel_d3', label: 'قیف بازگشت سرمایه و جذب (D3.js)' },
+              { id: 'sms_logs', label: `پیام و گزارش ارسال‌ها (${toPersianDigits(smsLogs.length)})` }
+            ].map((tab, idx) => {
+              const isActive = activeFilter === tab.id;
+              return (
+                <button role="tab" aria-selected={isActive}
+                  key={tab.id}
+                  type="button"
+                  onClick={() => {
+                    selection();
+                    setActiveFilter(tab.id as any);
+                  }}
+                  className={`px-3 py-1.5 rounded-xl text-[11px] whitespace-nowrap shrink-0 flex items-center gap-1.5 cursor-pointer ${getUnifiedChipClasses(idx + 5, isActive)}`}
+                >
+                  {tab.id === 'roi_funnel_d3' && <BarChart3 className="w-3.5 h-3.5" />}
+                  <span>{tab.label}</span>
+                </button>
+              );
+            })}
           </div>
         </div>
       </div>
 
-      {/* CHIP 1: SMS CAMPAIGNS */}
-      {activeChip === 'campaigns' && (
-        <div className="mx-2 space-y-2.5">
-          {filteredCampaigns.map(camp => {
-            const isCollapsed = !!collapsedCampaigns[camp.id];
-
-            return (
-              <div
-                key={camp.id}
-                className="bg-white rounded-[22px] p-3.5 shadow-2xs border border-slate-100 space-y-2 hover:shadow-sm transition-all"
+      {/* D3.js CRM Campaign ROI & Patient Conversion Funnel Panel */}
+      {activeFilter === 'roi_funnel_d3' && (
+        <div data-testid="marketing-d3-roi-panel" className="mx-2 bg-gradient-to-br from-rose-50 via-white to-pink-50 rounded-[24px] p-3.5 border border-rose-200/90 shadow-[var(--shadow-card)] space-y-3 animate-in fade-in duration-150">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h4 className="text-xs font-black text-slate-900">
+                تحلیل D3.js بازگشت سرمایه (ROI) و نرخ تبدیل کمپین‌های باشگاه مشتریان
+              </h4>
+              <span className="text-[10.5px] font-bold text-rose-800 block mt-0.5">
+                مجموع آورده کمپین‌ها: {formatToman(totalEstimatedRevenue)} · کل مراجعین جذب‌شده: {toPersianDigits(totalConversions)} نفر
+              </span>
+            </div>
+            {campaigns[0] && (
+              <button
+                type="button"
+                onClick={(e) => handleScheduleCampaignReminder(campaigns[0], e)}
+                className="px-2.5 py-1.5 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 text-[10.5px] font-black flex items-center gap-1 cursor-pointer"
               >
-                {/* Collapsible Header */}
-                <div
-                  onClick={() => toggleCampaignCollapse(camp.id)}
-                  className="flex items-start justify-between cursor-pointer select-none"
-                >
-                  <div className="space-y-0.5">
-                    <div className="flex items-center gap-2">
-                      <h4 className="text-xs font-black text-slate-900">{camp.title}</h4>
-                      <span className="text-[10px] font-mono font-bold text-pink-700 bg-pink-50 border border-pink-200 px-2 py-0.5 rounded-md">
-                        {camp.promoCode}
-                      </span>
-                    </div>
-                    <span className="text-[10px] text-slate-500 block">
-                      مخاطبان هدف: {camp.targetAudience} ({toPersianDigits(camp.audienceCount)} نفر)
-                    </span>
-                  </div>
+                <BellRing className="w-3.5 h-3.5 text-amber-600" />
+                <span>ثبت یادآور اجرای فراخوان</span>
+              </button>
+            )}
+          </div>
 
-                  <div className="flex items-center gap-2 shrink-0">
-                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                      camp.status === 'active' 
-                        ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' 
-                        : 'bg-slate-100 text-slate-600'
-                    }`}>
-                      {camp.status === 'active' ? 'در حال اجرا' : 'خاتمه یافته'}
-                    </span>
-                    <div className="w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center text-slate-500">
-                      {isCollapsed ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronUp className="w-3.5 h-3.5" />}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Quick Performance Numbers */}
-                <div className="grid grid-cols-3 gap-1.5 text-center text-[10px] bg-slate-50 p-2 rounded-xl border border-slate-100 font-mono">
-                  <div>
-                    <span className="text-slate-400 block text-[9px] font-sans">تخفیف جشنواره</span>
-                    <span className="font-black text-pink-600">{toPersianDigits(camp.discountPercent)}٪</span>
-                  </div>
-                  <div>
-                    <span className="text-slate-400 block text-[9px] font-sans">بیماران جذب‌شده</span>
-                    <span className="font-black text-emerald-700">{toPersianDigits(camp.convertedCount)} نفر</span>
-                  </div>
-                  <div>
-                    <span className="text-slate-400 block text-[9px] font-sans">درآمد حاصله</span>
-                    <span className="font-black text-slate-800">{formatToman(camp.revenueGenerated)}</span>
-                  </div>
-                </div>
-
-                {/* Collapsible Body */}
-                {!isCollapsed && (
-                  <div className="space-y-2.5 pt-1 border-t border-slate-100 animate-in fade-in">
-                    <div className="bg-pink-50/50 p-2.5 rounded-xl border border-pink-100 text-[11px] text-slate-700 leading-relaxed font-sans">
-                      <span className="text-[10px] text-pink-700 font-bold block mb-1">متن پیامک ارسالی:</span>
-                      {camp.smsText}
-                    </div>
-
-                    <div className="flex items-center justify-between text-[10px] text-slate-500 pt-1">
-                      <span>مهلت اعتبار: <b className="font-mono text-slate-800">{toPersianDigits(camp.endDate)}</b></span>
-
-                      <div className="flex items-center gap-1.5">
-                        <button
-                          onClick={() => {
-                            impactLight();
-                            navigator.clipboard?.writeText(camp.promoCode);
-                            showToast(`کد تخفیف ${camp.promoCode} کپی شد.`);
-                          }}
-                          className="py-1 px-2.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold flex items-center gap-1 transition-colors"
-                        >
-                          <Copy className="w-3 h-3" />
-                          <span>کپی کد</span>
-                        </button>
-
-                        <button
-                          onClick={() => {
-                            impactHeavy();
-                            showToast(`پیامک کمپین برای ${toPersianDigits(camp.audienceCount)} مخاطب هدف با موفقیت صف‌بندی و ارسال شد.`);
-                          }}
-                          className="py-1.5 px-3 rounded-lg bg-pink-600 hover:bg-pink-700 text-white font-bold flex items-center gap-1 shadow-2xs active:scale-95 transition-all"
-                        >
-                          <Send className="w-3 h-3 -scale-x-100" />
-                          <span>ارسال گروهی پیامک</span>
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                )}
+          <div className="bg-white rounded-2xl p-3 border border-rose-200/80 space-y-2">
+            <div className="flex items-center justify-between text-[10px] font-bold">
+              <div className="flex items-center gap-3">
+                <span className="flex items-center gap-1 text-rose-600">
+                  <span className="w-2.5 h-2.5 rounded-sm bg-rose-500 inline-block" />
+                  آورده مالی پیش‌بینی‌شده (میلیون تومان)
+                </span>
+                <span className="flex items-center gap-1 text-emerald-700">
+                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block" />
+                  تعداد جذب واقعی (نفر)
+                </span>
               </div>
-            );
-          })}
-        </div>
-      )}
-
-      {/* CHIP 2: BIRTHDAY AUTOMATION */}
-      {activeChip === 'birthday' && (
-        <div className="mx-2 space-y-3">
-          <div className="bg-white rounded-[24px] p-4 border border-slate-100 shadow-2xs space-y-3">
-            <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-              <div className="flex items-center gap-2">
-                <Gift className="w-4 h-4 text-pink-600" />
-                <h4 className="text-xs font-black text-slate-800">سامانه خودکار تبریک تولد بیماران</h4>
-              </div>
-              <span className="text-[10px] bg-emerald-50 text-emerald-800 border border-emerald-200 px-2.5 py-0.5 rounded-full font-bold">
-                فعال و هوشمند
+              <span className="font-mono font-black text-rose-700">
+                {toPersianDigits(campaigns.length)} کمپین فعال
               </span>
             </div>
 
-            <p className="text-[11px] text-slate-600 leading-relaxed">
-              سیستم به صورت خودکار در ساعت ۱۰ صبح روز تولد هر بیمار، پیامک تبریک به همراه کوپن هدیه کلینیک مینادنتال ارسال می‌کند:
-            </p>
-
-            <div className="p-3 rounded-2xl bg-gradient-to-r from-pink-50 to-rose-50 border border-pink-200/80 space-y-2">
-              <div className="flex items-center justify-between text-xs">
-                <span className="font-black text-pink-900">هدیه پیش‌فرض کلینیک:</span>
-                <span className="font-bold text-pink-700">جرم‌گیری رایگان یا ۲۵٪ تخفیف</span>
-              </div>
-              <p className="text-[11px] text-slate-600 leading-relaxed">
-                «[نام] عزیز؛ زادروزتان مبارک. کلینیک مینادنتال یک جلسه جرم‌گیری و بروساژ رایگان تا پایان ماه به عنوان هدیه برای شما در نظر گرفته است. رزرو نوبت: ۰۲۱۸۸۲۲۳۳۴۴»
-              </p>
-            </div>
-
-            <div className="pt-1">
-              <button
-                onClick={() => {
-                  impactHeavy();
-                  showToast('پیامک‌های تبریک متولدین این هفته با موفقیت ارسال شدند.');
-                }}
-                className="w-full py-2.5 rounded-xl bg-pink-600 hover:bg-pink-700 text-white font-black text-xs shadow-md shadow-pink-600/25 active:scale-95 transition-all flex items-center justify-center gap-1.5"
-              >
-                <Sparkles className="w-3.5 h-3.5" />
-                <span>بررسی و ارسال برای متولدین امروز و این هفته</span>
-              </button>
-            </div>
+            <svg
+              data-testid="marketing-d3-roi-svg"
+              viewBox={`0 0 ${d3CampaignAnalytics.width} ${d3CampaignAnalytics.height}`}
+              className="w-full h-28 overflow-visible"
+            >
+              <line
+                x1={22}
+                y1={d3CampaignAnalytics.height - 22}
+                x2={d3CampaignAnalytics.width - 12}
+                y2={d3CampaignAnalytics.height - 22}
+                stroke="#cbd5e1"
+                strokeWidth="1"
+              />
+              {d3CampaignAnalytics.items.map((item) => {
+                const x = d3CampaignAnalytics.xScale(item.id) || 30;
+                const bw = d3CampaignAnalytics.xScale.bandwidth();
+                const baseY = d3CampaignAnalytics.height - 22;
+                const barY = d3CampaignAnalytics.yScale(item.revenueM);
+                const barH = Math.max(4, baseY - barY);
+                return (
+                  <g key={item.id}>
+                    <rect
+                      x={x}
+                      y={barY}
+                      width={bw}
+                      height={barH}
+                      rx={5}
+                      fill="#e11d48"
+                      fillOpacity={0.85}
+                    />
+                    <text
+                      x={x + bw / 2}
+                      y={Math.max(10, barY - 4)}
+                      textAnchor="middle"
+                      fontSize="7.5"
+                      fill="#881337"
+                      fontWeight="bold"
+                    >
+                      {toPersianDigits(item.revenueM)}M ({toPersianDigits(item.conversions)} نفر)
+                    </text>
+                    <text
+                      x={x + bw / 2}
+                      y={baseY + 12}
+                      textAnchor="middle"
+                      fontSize="7.5"
+                      fill="#334155"
+                      fontWeight="bold"
+                    >
+                      {item.shortTitle}
+                    </text>
+                  </g>
+                );
+              })}
+            </svg>
           </div>
         </div>
       )}
 
-      {/* CHIP 3: RECALL & RE-ENGAGEMENT */}
-      {activeChip === 'recall' && (
-        <div className="mx-2 space-y-3">
-          <div className="bg-white rounded-[24px] p-4 border border-slate-100 shadow-2xs space-y-3">
-            <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-              <div className="flex items-center gap-2">
-                <Users className="w-4 h-4 text-pink-600" />
-                <h4 className="text-xs font-black text-slate-800">فراخوان هوشمند بازگشت بیماران (Recall)</h4>
-              </div>
-              <span className="text-[10px] text-slate-400 font-mono">
-                {toPersianDigits(185)} بیمار واجد شرایط
+      {/* Inline Manager PIN Unlock Strip if non-manager attempts delete */}
+      {!canManageCampaigns && showPinPrompt && (
+        <div className="mx-2 p-3 rounded-[20px] bg-amber-50 border border-amber-300 shadow-2xs flex flex-wrap items-center justify-between gap-2 text-xs">
+          <span className="font-bold text-amber-900 flex items-center gap-1.5">
+            <Lock className="w-4 h-4 text-amber-700" />
+            <span>احراز هویت مدیر برای حذف کمپین:</span>
+          </span>
+          <div className="flex items-center gap-1.5">
+            <input
+              type="password"
+              aria-label="پین مدیر بازاریابی"
+              dir="ltr"
+              value={pinInput}
+              onChange={(e) => {
+                setPinInput(e.target.value);
+                setPinError(false);
+              }}
+              placeholder="PIN (1234)"
+              className="w-28 bg-white border border-amber-300 rounded-xl px-2 py-1.5 text-xs font-mono font-bold text-center text-slate-900 focus:outline-none"
+            />
+            <button
+              type="button"
+              onClick={verifyManagerPin}
+              className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-black cursor-pointer"
+            >
+              تایید مدیر
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowPinPrompt(false)}
+              className="px-2.5 py-1.5 rounded-xl bg-white border border-slate-200 text-slate-600 text-[11px] font-bold cursor-pointer"
+            >
+              بستن
+            </button>
+            {pinError && <span className="text-[10.5px] font-bold text-rose-600">پین نادرست است</span>}
+          </div>
+        </div>
+      )}
+
+      {/* Create Campaign Form */}
+      {showNewModal && (
+        <form onSubmit={handleCreateCampaign} className="mx-2 bg-white rounded-[24px] p-4 border-2 border-rose-200 shadow-md space-y-3 text-xs animate-in fade-in">
+          <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+            <span className="font-black text-slate-900">تعریف کمپین پیامکی و جشنواره تخفیف جدید</span>
+            <button type="button" onClick={() => setShowNewModal(false)} className="text-slate-500 hover:text-slate-800 font-bold cursor-pointer">بستن</button>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-2.5">
+            <div className="sm:col-span-2">
+              <label className="text-slate-700 font-bold block mb-1">عنوان کمپین تبلیغاتی</label>
+              <input
+                aria-label="عنوان کمپین تبلیغاتی"
+                type="text"
+                required
+                placeholder="مثال: جشنواره ایمپلنت و طراحی لبخند پاییزه"
+                value={newTitle}
+                onChange={(e) => setNewTitle(e.target.value)}
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-900 font-bold focus:outline-none focus:border-rose-500"
+              />
+            </div>
+            <div>
+              <label htmlFor="new-campaign-segment" className="text-slate-700 font-bold block mb-1">گروه هدف کمپین</label>
+              <select
+                id="new-campaign-segment"
+                aria-label="گروه هدف کمپین"
+                value={newSegment}
+                onChange={(e) => setNewSegment(e.target.value as CampaignSegment)}
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2 text-slate-900 font-bold focus:outline-none focus:border-rose-500"
+              >
+                <option value="recall_6m">فراخوان تأخیر ۶ ماهه</option>
+                <option value="open_treatment">طرح درمان باز پالمر</option>
+                <option value="vip_settled">بیماران خوش‌حساب VIP</option>
+                <option value="all">همه بیماران مطب</option>
+              </select>
+            </div>
+            <div>
+              <label className="text-slate-700 font-bold block mb-1">درصد هدیه / تخفیف (%)</label>
+              <input aria-label="درصد هدیه / تخفیف (%)"
+                type="number"
+                value={newDiscount}
+                onChange={(e) => setNewDiscount(e.target.value)}
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-900 font-mono font-bold text-center focus:outline-none focus:border-rose-500"
+              />
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <label className="text-slate-700 font-bold block">متن پیامک ارسالی به بیماران</label>
+              <span className="text-[10px] font-mono font-bold text-rose-700">
+                {toPersianDigits(newTemplate.length)} کاراکتر ({toPersianDigits(Math.max(1, Math.ceil(newTemplate.length / 70)))} صفحه پیامک فارسی)
               </span>
             </div>
-
-            <div className="grid grid-cols-2 gap-2 text-center text-xs">
-              <div className="p-3 rounded-2xl bg-amber-50 border border-amber-200">
-                <span className="text-[10px] text-amber-800 block">عدم مراجعه ۶ تا ۱۲ ماه</span>
-                <span className="text-sm font-black text-amber-900 font-mono mt-0.5 block">{toPersianDigits(112)} نفر</span>
+            <textarea aria-label="متن پیامک ارسالی به بیماران"
+              rows={2}
+              value={newTemplate}
+              onChange={(e) => setNewTemplate(e.target.value)}
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-slate-800 leading-relaxed focus:outline-none focus:border-rose-500"
+            />
+            {patients[0] && (
+              <div className="p-2 rounded-xl bg-rose-50/70 border border-rose-200/70 text-[10.5px] text-rose-950">
+                <span className="font-black text-rose-700">پیش‌نمایش زنده: </span>
+                {newTemplate.replace(/\{نام_بیمار\}/g, patients[0].fullName)}
               </div>
-              <div className="p-3 rounded-2xl bg-rose-50 border border-rose-200">
-                <span className="text-[10px] text-rose-800 block">بیش از ۱ سال بدون ویزیت</span>
-                <span className="text-sm font-black text-rose-900 font-mono mt-0.5 block">{toPersianDigits(73)} نفر</span>
-              </div>
-            </div>
-
-            <div className="p-3 rounded-2xl bg-slate-50 border border-slate-100 text-[11px] text-slate-600 space-y-1">
-              <span className="font-bold text-slate-800 block">مزیت فراخوان بیماران:</span>
-              <p className="leading-relaxed">
-                ارسال پیامک چکاپ دوره‌ای و یادآوری سلامت دندان‌ها نرخ بازگشت بیماران کلینیک را تا ۳۵٪ افزایش می‌دهد و پوسیدگی‌های زودهنگام را قبل از نیاز به عصب‌کشی مهار می‌کند.
-              </p>
-            </div>
-
+            )}
+          </div>
+          <div className="flex justify-end gap-2">
             <button
-              onClick={() => {
-                impactHeavy();
-                showToast(`پیامک فراخوان چکاپ برای ۱۸۵ بیمار غیرفعال با موفقیت ارسال شد.`);
-              }}
-              className="w-full py-2.5 rounded-xl bg-pink-600 hover:bg-pink-700 text-white font-black text-xs shadow-md shadow-pink-600/25 active:scale-95 transition-all flex items-center justify-center gap-1.5"
+              type="submit"
+              className="py-2 px-5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-black shadow-sm active:scale-95 transition-all cursor-pointer"
             >
-              <Send className="w-3.5 h-3.5 -scale-x-100" />
-              <span>ارسال سراسری پیامک فراخوان چکاپ رایگان</span>
+              ذخیره و فعال‌سازی کمپین
             </button>
           </div>
-        </div>
+        </form>
       )}
 
-      {/* CHIP 4: LOYALTY CLUB & REFERRAL */}
-      {activeChip === 'club' && (
+      {/* Quick SMS Messaging & Outbox Delivery Logs Chip */}
+      {activeFilter === 'sms_logs' ? (
         <div className="mx-2 space-y-3">
-          <div className="bg-white rounded-[24px] p-4 border border-slate-100 shadow-2xs space-y-3">
-            <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+          <div className="bg-white rounded-[24px] p-4 border border-rose-200/90 shadow-xs space-y-3 text-xs">
+            <div className="flex items-center justify-between flex-wrap gap-2 pb-2 border-b border-slate-100">
               <div className="flex items-center gap-2">
-                <Trophy className="w-4 h-4 text-pink-600" />
-                <h4 className="text-xs font-black text-slate-800">باشگاه وفاداری و معرفی دوستان (Referral)</h4>
+                <MessageSquare className="w-4 h-4 text-rose-600" />
+                <h4 className="font-black text-slate-900">ارسال سریع پیامک خدماتی و مرکز گزارش ارسال‌ها</h4>
               </div>
-              <span className="text-[10px] bg-pink-50 text-pink-700 px-2 py-0.5 rounded-md font-bold font-mono">
-                کیف پول اعتباری
+              <span className="px-2.5 py-0.5 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-900 font-mono font-black text-[10.5px]">
+                شارژ پنل پیامک: {toPersianDigits(smsCredit)} عدد
               </span>
             </div>
 
-            <div className="space-y-2.5 text-xs">
-              <div className="p-3 rounded-2xl bg-slate-50 border border-slate-100 space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="font-bold text-slate-800">پاداش معرفی بیمار جدید:</span>
-                  <span className="font-mono font-black text-pink-700">{formatToman(referralBonusToman)}</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  {[200000, 300000, 500000, 1000000].map(amount => (
-                    <button
-                      key={amount}
-                      onClick={() => {
-                        selection();
-                        setReferralBonusToman(amount);
-                      }}
-                      className={`flex-1 py-1 rounded-lg text-[10px] font-mono font-bold transition-all ${
-                        referralBonusToman === amount
-                          ? 'bg-pink-600 text-white shadow-2xs'
-                          : 'bg-white text-slate-700 border border-slate-200'
-                      }`}
-                    >
-                      {formatToman(amount)}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="p-3 rounded-2xl bg-slate-50 border border-slate-100 space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="font-bold text-slate-800">کش‌بک نقدی به کیف پول بیمار:</span>
-                  <span className="font-mono font-black text-pink-700">{toPersianDigits(cashbackPercent)}٪ از هر درمان</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  {[3, 5, 10, 15].map(pct => (
-                    <button
-                      key={pct}
-                      onClick={() => {
-                        selection();
-                        setCashbackPercent(pct);
-                      }}
-                      className={`flex-1 py-1 rounded-lg text-xs font-mono font-bold transition-all ${
-                        cashbackPercent === pct
-                          ? 'bg-pink-600 text-white shadow-2xs'
-                          : 'bg-white text-slate-700 border border-slate-200'
-                      }`}
-                    >
-                      {toPersianDigits(pct)}٪
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            <button
-              onClick={() => {
-                impactHeavy();
-                showToast('قوانین باشگاه مشتریان و مبالغ هدیه معرفی ذخیره شد.');
-              }}
-              className="w-full py-2.5 rounded-xl bg-pink-600 hover:bg-pink-700 text-white font-black text-xs shadow-md shadow-pink-600/25 active:scale-95 transition-all"
-            >
-              ذخیره و فعال‌سازی در سیستم پذیرش
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* CHIP 5: INSTAGRAM & WHATSAPP SOCIAL BANNERS */}
-      {activeChip === 'banners' && (
-        <div className="mx-2 space-y-3">
-          <div className="bg-white rounded-[24px] p-4 border border-slate-100 shadow-2xs space-y-3">
-            <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-              <div className="flex items-center gap-2">
-                <Share2 className="w-4 h-4 text-pink-600" />
-                <h4 className="text-xs font-black text-slate-800">بنرهای تبلیغاتی آماده استوری اینستاگرام</h4>
-              </div>
-              <span className="text-[10px] text-slate-400">سایز استاندارد 9:16</span>
-            </div>
-
-            {/* Banner Mockup */}
-            <div className="rounded-3xl p-5 bg-gradient-to-br from-pink-600 via-rose-600 to-purple-800 text-white text-center space-y-3 shadow-lg relative overflow-hidden">
-              <div className="absolute top-0 right-0 -mr-6 -mt-6 w-24 h-24 bg-white/10 rounded-full blur-xl" />
-              <div className="w-10 h-10 rounded-2xl bg-white/20 mx-auto flex items-center justify-center">
-                <Sparkles className="w-5 h-5 text-yellow-300" />
-              </div>
-
-              <div>
-                <span className="text-[10px] font-bold tracking-wider uppercase opacity-80">MINA DENTAL CLINIC</span>
-                <h3 className="text-base font-black mt-1">جشنواره لبخند طلایی مینادنتال</h3>
-                <p className="text-xs opacity-90 mt-1">تخفیف ویژه کامپوزیت زیبایی و لمینت سرامیکی</p>
-              </div>
-
-              <div className="inline-block bg-white text-pink-700 font-mono font-black text-xs px-4 py-1.5 rounded-full shadow-md">
-                کد تخفیف: MINA-SMILE
-              </div>
-
-              <div className="text-[10px] opacity-75 pt-1">
-                تلفن رزرو وقت: ۰۲۱-۸۸۲۲۳۳۴۴ · تهران، ونک
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2 pt-1">
-              <button
-                onClick={() => {
-                  impactLight();
-                  showToast('تصویر بنر استوری با کیفیت بالا دانلود شد.');
-                }}
-                className="flex-1 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-colors"
-              >
-                دانلود تصویر استوری
-              </button>
-              <button
-                onClick={() => {
-                  impactHeavy();
-                  showToast('بنر در کانال واتساپ و اینستاگرام کلینیک به اشتراک گذاشته شد.');
-                }}
-                className="flex-1 py-2 rounded-xl bg-pink-600 hover:bg-pink-700 text-white text-xs font-black shadow-md shadow-pink-600/25 active:scale-95 transition-all"
-              >
-                اشتراک‌گذاری مستقیم
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* New Campaign Modal */}
-      {showNewCampaignModal && (
-        <div className="fixed inset-0 z-50 bg-slate-950/25 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in">
-          <div className="w-full max-w-md bg-white text-slate-900 rounded-t-[32px] sm:rounded-[28px] border border-pink-200 p-5 space-y-4 max-h-[92vh] overflow-y-auto shadow-2xl">
-            <div className="flex items-center justify-between pb-2.5 border-b border-pink-100">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-xl bg-pink-600 text-white flex items-center justify-center shadow-xs">
-                  <Megaphone className="w-4 h-4" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-black text-slate-900">تعریف کمپین تبلیغاتی جدید</h3>
-                  <span className="text-[10px] text-pink-700 font-bold">جشنواره و پیامک تخفیف کلینیک</span>
-                </div>
-              </div>
-              <button 
-                onClick={() => setShowNewCampaignModal(false)} 
-                className="w-7 h-7 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-800 flex items-center justify-center transition-colors"
-              >
-                ✕
-              </button>
-            </div>
-
-            <form onSubmit={handleCreateCampaign} className="space-y-3 text-xs">
-              <div>
-                <label className="text-slate-700 font-bold block mb-1">عنوان جشنواره یا مناسبت</label>
-                <input
-                  type="text"
-                  required
-                  value={formTitle}
-                  onChange={(e) => setFormTitle(e.target.value)}
-                  placeholder="مثال: جشنواره لبخند بهاری / روز دندانپزشک"
-                  className="w-full bg-white border border-pink-200 rounded-xl px-3 py-2 text-slate-900 placeholder-slate-400 focus:outline-none focus:border-pink-500 shadow-2xs"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="text-slate-700 font-bold block mb-1">درصد تخفیف</label>
-                  <input
-                    type="number"
-                    min={1}
-                    max={100}
-                    value={formDiscount}
-                    onChange={(e) => setFormDiscount(Number(e.target.value))}
-                    className="w-full bg-white border border-pink-200 rounded-xl px-3 py-2 text-slate-900 font-mono text-center focus:outline-none focus:border-pink-500 shadow-2xs"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-slate-700 font-bold block mb-1">کد تخفیف (کوپن)</label>
-                  <input
-                    type="text"
-                    value={formCode}
-                    onChange={(e) => setFormCode(e.target.value.toUpperCase())}
-                    placeholder="MINA-SPECIAL"
-                    className="w-full bg-white border border-pink-200 rounded-xl px-3 py-2 text-slate-900 font-mono text-center focus:outline-none focus:border-pink-500 shadow-2xs"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="text-slate-700 font-bold block mb-1">مخاطبان هدف</label>
+            <div className="grid grid-cols-1 sm:grid-cols-12 gap-2">
+              <div className="sm:col-span-4">
+                <label className="text-[10.5px] font-bold text-slate-700 block mb-1">انتخاب بیمار</label>
                 <select
-                  value={formAudience}
-                  onChange={(e) => setFormAudience(e.target.value)}
-                  className="w-full bg-white border border-pink-200 rounded-xl px-3 py-2 text-slate-900 font-medium focus:outline-none focus:border-pink-500 shadow-2xs"
+                  aria-label="انتخاب بیمار برای پیامک سریع"
+                  value={quickSmsPatientId}
+                  onChange={(e) => setQuickSmsPatientId(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2 text-slate-900 font-bold focus:outline-none focus:border-rose-500"
                 >
-                  <option value="همه بیماران کلینیک">همه بیماران کلینیک ({toPersianDigits(patients.length * 15)} مخاطب)</option>
-                  <option value="بیماران متقاضی زیبایی و کامپوزیت">بیماران متقاضی زیبایی و ونیر</option>
-                  <option value="بیماران ایمپلنت و جراحی">بیماران ایمپلنت و جراحی</option>
-                  <option value="بیماران بدون مراجعه بیش از ۶ ماه">بیماران بدون مراجعه بیش از ۶ ماه (فراخوان)</option>
+                  {patients.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.fullName} ({toPersianDigits(p.phone)})
+                    </option>
+                  ))}
                 </select>
               </div>
-
-              <div>
-                <label className="text-slate-700 font-bold block mb-1">متن پیامک تبلیغاتی</label>
-                <textarea
-                  rows={3}
-                  value={formSmsText}
-                  onChange={(e) => setFormSmsText(e.target.value)}
-                  placeholder="سلام [نام] گرامی؛ تخفیف ویژه کلینیک مینادنتال..."
-                  className="w-full bg-white border border-pink-200 rounded-xl p-3 text-slate-900 focus:outline-none focus:border-pink-500 shadow-2xs leading-relaxed"
+              <div className="sm:col-span-6">
+                <label className="text-[10.5px] font-bold text-slate-700 block mb-1">متن پیامک خدماتی</label>
+                <input
+                  aria-label="متن پیامک سریع"
+                  type="text"
+                  value={quickSmsText}
+                  onChange={(e) => setQuickSmsText(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-900 font-bold focus:outline-none focus:border-rose-500"
                 />
               </div>
-
-              <div className="pt-2 flex items-center gap-2">
+              <div className="sm:col-span-2 flex items-end">
                 <button
                   type="button"
-                  onClick={() => setShowNewCampaignModal(false)}
-                  className="w-1/3 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-colors"
+                  disabled={sendingQuickSms}
+                  onClick={async () => {
+                    const target = patients.find((p) => p.id === quickSmsPatientId) || patients[0];
+                    if (!target || !quickSmsText.trim()) return;
+                    setSendingQuickSms(true);
+                    const res = await clinicalSmsService.sendPatternSms(
+                      target.phone,
+                      target.fullName,
+                      'custom',
+                      { customText: quickSmsText.trim() }
+                    );
+                    setSendingQuickSms(false);
+                    setSmsLogs([...clinicalSmsService.getLogs()]);
+                    setSmsCredit(res.remainingCredit);
+                    if (res.success) {
+                      success();
+                      triggerToast(`پیامک تکی برای ${target.fullName} ارسال شد (${res.refId}).`);
+                    } else {
+                      triggerToast(res.message);
+                    }
+                  }}
+                  className="w-full py-2 px-3 rounded-xl bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white font-black flex items-center justify-center gap-1 cursor-pointer active:scale-95"
                 >
-                  انصراف
-                </button>
-                <button
-                  type="submit"
-                  className="w-2/3 py-2.5 rounded-xl bg-pink-600 hover:bg-pink-700 text-white text-xs font-black shadow-md shadow-pink-600/25 active:scale-95 transition-all"
-                >
-                  ثبت و راه‌اندازی کمپین
+                  <Send className="w-3.5 h-3.5 -scale-x-100" />
+                  <span>{sendingQuickSms ? 'در حال ارسال...' : 'ارسال پیامک'}</span>
                 </button>
               </div>
-            </form>
+            </div>
+
+            <div className="space-y-1.5 pt-2 border-t border-slate-100">
+              <span className="font-black text-slate-800 block">
+                تاریخچه پیامک‌های ارسالی و تاییدیه مخابرات ({toPersianDigits(smsLogs.length)} مورد)
+              </span>
+              {smsLogs.length === 0 ? (
+                <div className="p-4 text-center rounded-2xl bg-slate-50 text-slate-500 font-bold">
+                  هنوز پیامکی از پنل ارسال نشده است؛ می‌توانید همین بالا پیامک سریع بفرستید.
+                </div>
+              ) : (
+                <div className="space-y-1.5 max-h-96 overflow-y-auto pr-0.5">
+                  {smsLogs.slice(0, 25).map((log) => (
+                    <div key={log.id} className="p-2.5 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-1">
+                      <div className="flex items-center justify-between gap-2 flex-wrap">
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-black text-slate-900">{log.recipientName}</span>
+                          <span className="font-mono text-[10px] text-slate-600" dir="ltr">{toPersianDigits(log.recipientMobile)}</span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-900 font-black text-[9.5px]">
+                            {log.deliveryReceipt || 'ارسال موفق ✓'}
+                          </span>
+                          <span className="font-mono text-[9.5px] text-slate-500">{log.refId}</span>
+                        </div>
+                      </div>
+                      <p className="text-[11px] text-slate-700 leading-relaxed">{log.messageText}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         </div>
+      ) : (
+      /* Campaigns List (Default-Collapsed with Numbered Badges & Accent Borders) */
+      <div className="mx-2 space-y-2.5">
+        {filteredCampaigns.map((camp, index) => {
+          const isExpanded = expandedCampaigns.has(camp.id);
+          const borderAccent = camp.status === 'active' ? 'border-r-rose-500' : 'border-r-amber-500';
+          const { list: cohort, isFallback } = getCohortDetails(camp);
+
+          return (
+            <div
+              key={camp.id}
+              className={`bg-white rounded-[20px] border border-slate-200/90 border-r-[3px] ${borderAccent} shadow-[var(--shadow-card)] overflow-hidden transition-all ${
+                isExpanded ? 'p-3.5 space-y-3 ring-1 ring-rose-200' : 'p-2.5 hover:bg-slate-50/70'
+              }`}
+            >
+              {/* Compact Header Row */}
+              <div
+                onClick={() => toggleExpand(camp.id)}
+                className="flex items-center justify-between gap-2 cursor-pointer"
+              >
+                <div className="flex items-center gap-2 min-w-0">
+                  <div className="relative shrink-0">
+                    <div className="w-9 h-9 rounded-xl bg-rose-50 border border-rose-200 text-rose-600 flex items-center justify-center font-black">
+                      <Gift className="w-4 h-4 stroke-[2.4]" />
+                    </div>
+                    <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 rounded-full bg-rose-600 text-white text-[9px] font-mono font-black flex items-center justify-center border border-white shadow-2xs">
+                      #{toPersianDigits(index + 1)}
+                    </span>
+                  </div>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <h4 className="text-xs font-black text-slate-900 truncate">{camp.title}</h4>
+                      <span className="px-2 py-0.5 rounded-lg bg-rose-100 text-rose-800 text-[10px] font-black border border-rose-200">
+                        {toPersianDigits(camp.discountPercent)}٪ تخفیف
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-slate-500 font-bold mt-0.5 truncate">
+                      مخاطب هدف: {toPersianDigits(cohort.length)} بیمار · جذب: {toPersianDigits(camp.conversionCount)} نفر
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <span className={`px-2 py-0.5 rounded-lg text-[9.5px] font-bold ${
+                    camp.status === 'active' ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' : 'bg-amber-100 text-amber-800 border border-amber-200'
+                  }`}>
+                    {camp.status === 'active' ? 'فعال' : 'زمان‌بندی‌شده'}
+                  </span>
+                  <div className={`w-7 h-7 rounded-lg flex items-center justify-center transition-colors ${isExpanded ? 'bg-rose-600 text-white' : 'bg-slate-100 text-slate-600'}`}>
+                    {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                  </div>
+                </div>
+              </div>
+
+              {/* Collapsible Content */}
+              {isExpanded && (
+                <div className="pt-2.5 border-t border-slate-100 space-y-3 animate-in fade-in duration-150">
+                  <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80 text-[11px] text-slate-700 leading-relaxed">
+                    <span className="font-bold text-rose-700 block mb-0.5">الگوی پیامک هوشمند:</span>
+                    {camp.messageTemplate}
+                  </div>
+
+                  {cohort.length > 0 && (
+                    <div className="flex items-center gap-1.5 flex-wrap text-[10.5px]">
+                      <span className="font-black text-slate-600">
+                        مخاطبین هدف ({toPersianDigits(cohort.length)} پرونده{isFallback ? ' · کل پرونده‌های پیشنهادی' : ''}):
+                      </span>
+                      {cohort.slice(0, 6).map((pat) => (
+                        <button
+                          key={pat.id}
+                          type="button"
+                          onClick={() => onOpenPatientFile?.(pat, 'treatments')}
+                          className="px-2 py-0.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-900 border border-rose-200 font-bold flex items-center gap-1 cursor-pointer"
+                        >
+                          <FolderOpen className="w-2.5 h-2.5 text-rose-600" />
+                          <span>{pat.fullName}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="flex items-center justify-between flex-wrap gap-2 pt-1">
+                    <div className="flex items-center gap-3 text-[11px]">
+                      <span className="text-slate-600">
+                        مخاطبین فعال: <strong className="font-mono text-slate-900">{toPersianDigits(cohort.length)} پرونده</strong>
+                      </span>
+                      <span className="text-emerald-700 font-bold">
+                        آورده مالی: <strong className="font-mono">{formatToman(camp.estimatedRevenue)}</strong>
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <button
+                        type="button"
+                        onClick={() => handleToggleCampaignStatus(camp)}
+                        className="py-1.5 px-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 text-[10.5px] font-black flex items-center gap-1 cursor-pointer"
+                      >
+                        {camp.status === 'active' ? (
+                          <>
+                            <PauseCircle className="w-3.5 h-3.5 text-amber-600" />
+                            <span>توقف موقت</span>
+                          </>
+                        ) : (
+                          <>
+                            <PlayCircle className="w-3.5 h-3.5 text-emerald-600" />
+                            <span>فعال‌سازی</span>
+                          </>
+                        )}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => handleScheduleCampaignReminder(camp, e)}
+                        className="py-1.5 px-2.5 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 text-[10.5px] font-black flex items-center gap-1 cursor-pointer"
+                      >
+                        <BellRing className="w-3.5 h-3.5 text-amber-600" />
+                        <span>یادآور فراخوان</span>
+                      </button>
+                      {!canManageCampaigns ? (
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteCampaign(camp.id, camp.title)}
+                          className="py-1.5 px-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 border border-slate-200 text-[10.5px] font-black flex items-center gap-1 cursor-pointer"
+                        >
+                          <Lock className="w-3.5 h-3.5" />
+                          <span>قفل حذف مدیر</span>
+                        </button>
+                      ) : confirmDeleteId === camp.id ? (
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => setConfirmDeleteId(null)}
+                            className="py-1.5 px-2.5 rounded-xl bg-slate-100 text-slate-700 text-[10.5px] font-bold cursor-pointer"
+                          >
+                            انصراف
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteCampaign(camp.id, camp.title)}
+                            className="py-1.5 px-3 rounded-xl bg-rose-600 hover:bg-rose-700 text-white border border-rose-700 text-[10.5px] font-black flex items-center gap-1 cursor-pointer animate-pulse"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            <span>تایید حذف ✓</span>
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteCampaign(camp.id, camp.title)}
+                          className="py-1.5 px-2.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-[10.5px] font-black flex items-center gap-1 cursor-pointer"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          <span>حذف</span>
+                        </button>
+                      )}
+
+                      <button
+                        type="button"
+                        disabled={isSendingId === camp.id}
+                        onClick={() => handleSendCampaign(camp)}
+                        className="py-1.5 px-3.5 rounded-xl bg-rose-600 hover:bg-rose-700 disabled:opacity-60 text-white text-[11px] font-black flex items-center gap-1.5 shadow-sm active:scale-95 transition-all cursor-pointer"
+                      >
+                        <Send className="w-3.5 h-3.5 -scale-x-100" />
+                        <span>{isSendingId === camp.id ? 'در حال ارسال...' : 'ارسال گروهی واقعی به بیماران'}</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
       )}
     </div>
   );

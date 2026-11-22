@@ -4,11 +4,15 @@ import {
   HandMetal, Check, RefreshCw, ShieldCheck, Type, Contrast
 } from 'lucide-react';
 import { useHapticFeedback } from '../hooks/useHapticFeedback';
-import { setAcousticFeedbackEnabled, getAcousticFeedbackEnabled } from '../utils/haptics';
+import { setAcousticFeedbackEnabled, getAcousticFeedbackEnabled, getHapticIntensity, setHapticIntensity as setGlobalHapticIntensity, previewHapticIntensity, HapticIntensityLevel } from '../utils/haptics';
 import { autoSaveManager } from '../utils/autoSaveManager';
+import { useEscapeKey } from '../hooks/useDialogA11y';
+import { ViewportModalPortal } from './ViewportModalPortal';
+import { toPersianDigits } from '../utils/jalali';
 
 export type DisplayTheme = 'light' | 'dark' | 'high-contrast';
 export type FontScale = 'normal' | 'large' | 'xlarge';
+export type HapticIntensityOption = 'none' | 'light' | 'medium' | 'heavy';
 
 interface AccessibilityControlsModalProps {
   isOpen: boolean;
@@ -16,6 +20,7 @@ interface AccessibilityControlsModalProps {
   onThemeChange?: (theme: DisplayTheme) => void;
   onFontScaleChange?: (scale: FontScale) => void;
   onGloveModeToggle?: (enabled: boolean) => void;
+  onHapticIntensityChange?: (intensity: HapticIntensityOption) => void;
 }
 
 export const AccessibilityControlsModal: React.FC<AccessibilityControlsModalProps> = ({
@@ -23,9 +28,11 @@ export const AccessibilityControlsModal: React.FC<AccessibilityControlsModalProp
   onClose,
   onThemeChange,
   onFontScaleChange,
-  onGloveModeToggle
+  onGloveModeToggle,
+  onHapticIntensityChange
 }) => {
   const { impactLight, selection } = useHapticFeedback();
+  useEscapeKey(isOpen, onClose);
 
   const [theme, setTheme] = useState<DisplayTheme>(() => {
     if (typeof window !== 'undefined') {
@@ -49,11 +56,31 @@ export const AccessibilityControlsModal: React.FC<AccessibilityControlsModalProp
   });
 
   const [soundEnabled, setSoundEnabled] = useState<boolean>(getAcousticFeedbackEnabled());
+  // Haptic Intensity state: None, Light, Medium, Heavy
+  const [hapticIntensity, setHapticIntensity] = useState<HapticIntensityOption>(() => {
+    const current = getHapticIntensity();
+    return current === 'off' ? 'none' : current;
+  });
   const [draftsCount, setDraftsCount] = useState<number>(0);
 
   useEffect(() => {
+    const current = getHapticIntensity();
+    setHapticIntensity(current === 'off' ? 'none' : current);
     setDraftsCount(autoSaveManager.getAllDrafts().length);
   }, [isOpen]);
+
+  // Synchronize with external changes or hardware bridge events
+  useEffect(() => {
+    const handleHapticChange = (e: Event) => {
+      const customEvent = e as CustomEvent<HapticIntensityLevel>;
+      if (customEvent.detail) {
+        const normalized = customEvent.detail === 'off' ? 'none' : customEvent.detail;
+        setHapticIntensity(normalized);
+      }
+    };
+    window.addEventListener('minadental_haptic_intensity_changed', handleHapticChange);
+    return () => window.removeEventListener('minadental_haptic_intensity_changed', handleHapticChange);
+  }, []);
 
   if (!isOpen) return null;
 
@@ -100,14 +127,41 @@ export const AccessibilityControlsModal: React.FC<AccessibilityControlsModalProp
     setAcousticFeedbackEnabled(next);
   };
 
+  const handleResetDefaults = () => {
+    handleSetTheme('light');
+    handleSetFontScale('normal');
+    if (gloveMode) {
+      setGloveMode(false);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('minadental_glove_mode', 'false');
+        document.documentElement.classList.remove('glove-mode');
+      }
+      onGloveModeToggle?.(false);
+    }
+    setSoundEnabled(true);
+    setAcousticFeedbackEnabled(true);
+    setHapticIntensity('medium');
+    setGlobalHapticIntensity('medium');
+    onHapticIntensityChange?.('medium');
+  };
+
   return (
-    <div 
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200 select-none"
-      role="dialog"
-      aria-modal="true"
-      aria-label="تنظیمات دسترسی‌پذیری و ارگونومی بالینی"
-    >
-      <div className="relative w-full max-w-md bg-white rounded-3xl p-5 shadow-2xl border border-slate-200 flex flex-col gap-4 overflow-hidden animate-in zoom-in-95 duration-200 text-slate-900">
+    <ViewportModalPortal isOpen={isOpen}>
+      <div
+        dir="rtl"
+        onClick={() => {
+          impactLight();
+          onClose();
+        }}
+        className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-slate-950/55 backdrop-blur-sm animate-in fade-in duration-200 select-none"
+        role="dialog"
+        aria-modal="true"
+        aria-label="تنظیمات دسترسی‌پذیری و ارگونومی بالینی"
+      >
+        <div
+          onClick={(e) => e.stopPropagation()}
+          className="relative w-full max-w-md max-h-[92dvh] overflow-y-auto bg-white rounded-3xl p-5 shadow-2xl border border-slate-200 flex flex-col gap-4 animate-in zoom-in-95 duration-200 text-slate-900 text-right"
+        >
         
         {/* Header */}
         <div className="flex items-center justify-between border-b border-slate-100 pb-3">
@@ -121,11 +175,12 @@ export const AccessibilityControlsModal: React.FC<AccessibilityControlsModalProp
             </div>
           </div>
           <button
+            type="button"
             onClick={() => {
               impactLight();
               onClose();
             }}
-            className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center active:scale-95 transition-all"
+            className="min-w-[38px] min-h-[38px] rounded-[12px] bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center active:scale-95 transition-all cursor-pointer"
             aria-label="بستن"
           >
             <X className="w-4 h-4" />
@@ -140,7 +195,7 @@ export const AccessibilityControlsModal: React.FC<AccessibilityControlsModalProp
           </label>
           <div className="grid grid-cols-3 gap-2">
             {/* Light */}
-            <button
+            <button type="button"
               onClick={() => handleSetTheme('light')}
               className={`p-2.5 rounded-2xl border flex flex-col items-center gap-1.5 active:scale-95 transition-all ${
                 theme === 'light'
@@ -153,7 +208,7 @@ export const AccessibilityControlsModal: React.FC<AccessibilityControlsModalProp
             </button>
 
             {/* Dark Surgical */}
-            <button
+            <button type="button"
               onClick={() => handleSetTheme('dark')}
               className={`p-2.5 rounded-2xl border flex flex-col items-center gap-1.5 active:scale-95 transition-all ${
                 theme === 'dark'
@@ -166,7 +221,7 @@ export const AccessibilityControlsModal: React.FC<AccessibilityControlsModalProp
             </button>
 
             {/* Surgical Anti-Glare High-Contrast */}
-            <button
+            <button type="button"
               onClick={() => handleSetTheme('high-contrast')}
               className={`p-2.5 rounded-2xl border flex flex-col items-center gap-1.5 active:scale-95 transition-all ${
                 theme === 'high-contrast'
@@ -187,7 +242,7 @@ export const AccessibilityControlsModal: React.FC<AccessibilityControlsModalProp
             سایز متون و ارقام (خوانایی از فاصله دور)
           </label>
           <div className="grid grid-cols-3 gap-2">
-            <button
+            <button type="button"
               onClick={() => handleSetFontScale('normal')}
               className={`py-2 px-3 rounded-2xl border text-center active:scale-95 transition-all ${
                 fontScale === 'normal'
@@ -198,7 +253,7 @@ export const AccessibilityControlsModal: React.FC<AccessibilityControlsModalProp
               <span className="text-xs block">استاندارد (۱۰۰٪)</span>
             </button>
 
-            <button
+            <button type="button"
               onClick={() => handleSetFontScale('large')}
               className={`py-2 px-3 rounded-2xl border text-center active:scale-95 transition-all ${
                 fontScale === 'large'
@@ -209,7 +264,7 @@ export const AccessibilityControlsModal: React.FC<AccessibilityControlsModalProp
               <span className="text-xs font-bold block">بزرگ (۱۱۵٪)</span>
             </button>
 
-            <button
+            <button type="button"
               onClick={() => handleSetFontScale('xlarge')}
               className={`py-2 px-3 rounded-2xl border text-center active:scale-95 transition-all ${
                 fontScale === 'xlarge'
@@ -235,9 +290,11 @@ export const AccessibilityControlsModal: React.FC<AccessibilityControlsModalProp
                 <span className="text-[10px] text-slate-500 block">بزرگ‌نمایی دکمه‌ها و اهداف کلیک به ۴۸px+</span>
               </div>
             </div>
-            <button
+            <button type="button"
+              dir="ltr"
               onClick={handleToggleGloveMode}
-              className={`w-11 h-6 rounded-full transition-colors relative p-0.5 ${gloveMode ? 'bg-sky-600' : 'bg-slate-300'}`}
+              aria-pressed={gloveMode}
+              className={`w-11 h-6 rounded-full transition-colors relative p-0.5 flex items-center cursor-pointer ${gloveMode ? 'bg-sky-600' : 'bg-slate-300'}`}
               aria-label="تغییر حالت دستکش"
             >
               <div className={`w-5 h-5 rounded-full bg-white shadow-md transform transition-transform ${gloveMode ? 'translate-x-5' : 'translate-x-0'}`} />
@@ -255,13 +312,66 @@ export const AccessibilityControlsModal: React.FC<AccessibilityControlsModalProp
                 <span className="text-[10px] text-slate-500 block">فیدبک صوتی آرام همراه با لرزش هپتیک</span>
               </div>
             </div>
-            <button
+            <button type="button"
+              dir="ltr"
               onClick={handleToggleSound}
-              className={`w-11 h-6 rounded-full transition-colors relative p-0.5 ${soundEnabled ? 'bg-purple-600' : 'bg-slate-300'}`}
+              aria-pressed={soundEnabled}
+              className={`w-11 h-6 rounded-full transition-colors relative p-0.5 flex items-center cursor-pointer ${soundEnabled ? 'bg-purple-600' : 'bg-slate-300'}`}
               aria-label="تغییر صدای کلیک"
             >
               <div className={`w-5 h-5 rounded-full bg-white shadow-md transform transition-transform ${soundEnabled ? 'translate-x-5' : 'translate-x-0'}`} />
             </button>
+          </div>
+
+          {/* Haptic Intensity (None, Light, Medium, Heavy) */}
+          <div className="p-2.5 rounded-2xl bg-slate-50 border border-slate-200 space-y-1.5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5">
+                <Sparkles className="w-3.5 h-3.5 text-purple-600" />
+                <span className="text-xs font-bold text-slate-900">شدت بازخورد لمسی (Haptic Intensity)</span>
+              </div>
+              <span className="text-[10px] font-black text-purple-700 bg-purple-100/70 px-2 py-0.5 rounded-md">
+                {hapticIntensity === 'none'
+                  ? 'None (خاموش)'
+                  : hapticIntensity === 'light'
+                  ? 'Light (ملایم)'
+                  : hapticIntensity === 'medium'
+                  ? 'Medium (استاندارد)'
+                  : 'Heavy (قوی)'}
+              </span>
+            </div>
+            <div className="grid grid-cols-4 gap-1.5 pt-0.5">
+              {[
+                { id: 'none' as const, label: 'None', sub: 'خاموش' },
+                { id: 'light' as const, label: 'Light', sub: 'ملایم' },
+                { id: 'medium' as const, label: 'Medium', sub: 'استاندارد' },
+                { id: 'heavy' as const, label: 'Heavy', sub: 'قوی' }
+              ].map(opt => {
+                const isSelected = hapticIntensity === opt.id;
+                return (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    onClick={() => {
+                      setHapticIntensity(opt.id);
+                      setGlobalHapticIntensity(opt.id);
+                      previewHapticIntensity(opt.id);
+                      onHapticIntensityChange?.(opt.id);
+                    }}
+                    className={`py-1.5 px-1 rounded-xl text-center border transition-all cursor-pointer active:scale-95 flex flex-col items-center justify-center ${
+                      isSelected
+                        ? 'border-purple-600 bg-purple-600 text-white shadow-xs font-black'
+                        : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-100'
+                    }`}
+                  >
+                    <span className="text-[11px] font-black leading-tight">{opt.label}</span>
+                    <span className={`text-[9px] ${isSelected ? 'text-purple-100' : 'text-slate-400'}`}>
+                      {opt.sub}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </div>
 
@@ -274,23 +384,35 @@ export const AccessibilityControlsModal: React.FC<AccessibilityControlsModalProp
               <span className="text-[10px] text-emerald-700">پیش‌نویس‌ها در حافظه محلی ایمن نگهداری می‌شوند</span>
             </div>
           </div>
-          <span className="text-[10px] font-black bg-white px-2 py-0.5 rounded-lg border border-emerald-200">
-            فعال
+          <span className="text-[10px] font-black bg-white px-2 py-0.5 rounded-lg border border-emerald-200 shrink-0">
+            {draftsCount > 0 ? `${toPersianDigits(draftsCount)} پیش‌نویس ایمن` : 'فعال ✓'}
           </span>
         </div>
 
-        {/* Footer Close */}
-        <button
-          onClick={() => {
-            impactLight();
-            onClose();
-          }}
-          className="w-full py-2.5 rounded-2xl bg-slate-900 hover:bg-slate-800 text-white font-black text-xs active:scale-95 transition-all shadow-md"
-        >
-          ذخیره و اعمال تنظیمات
-        </button>
+        {/* Footer Actions: Reset + Save */}
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={handleResetDefaults}
+            className="px-3 py-2.5 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs flex items-center justify-center gap-1 active:scale-95 transition-all cursor-pointer shrink-0"
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+            <span>بازنشانی</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              impactLight();
+              onClose();
+            }}
+            className="flex-1 py-2.5 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs active:scale-95 transition-all shadow-md cursor-pointer"
+          >
+            ذخیره و اعمال تنظیمات
+          </button>
+        </div>
 
       </div>
     </div>
+    </ViewportModalPortal>
   );
 };

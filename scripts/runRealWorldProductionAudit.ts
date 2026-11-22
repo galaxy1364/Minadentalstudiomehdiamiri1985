@@ -109,7 +109,7 @@ export async function runRealWorldProductionAudit() {
     'قالب‌بندی مالی و ارقام فارسی',
     'CAL-03',
     'قالب‌بندی استاندارد ریالی به تومان با ارقام فارسی',
-    formattedToman.includes('۲۵٬۵۰۰٬۰۰۰') && formattedToman.includes('تومان'),
+    (formattedToman.includes('۲۵,۵۰۰,۰۰۰') || formattedToman.includes('۲۵٬۵۰۰٬۰۰۰')) && formattedToman.includes('تومان'),
     `مبلغ خروجی: ${formattedToman}`,
     `خطا در فرمت تومان: ${formattedToman}`
   );

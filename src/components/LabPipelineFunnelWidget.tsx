@@ -154,7 +154,7 @@ export const LabPipelineFunnelWidget: React.FC<LabPipelineFunnelWidgetProps> = (
           </div>
         </div>
 
-        <button
+        <button type="button"
           onClick={() => {
             impactLight();
             onNavigate('lab');
@@ -219,7 +219,7 @@ export const LabPipelineFunnelWidget: React.FC<LabPipelineFunnelWidgetProps> = (
         {funnelData.map((item) => {
           const isSelected = selectedStage === item.id;
           return (
-            <button
+            <button type="button"
               key={item.id}
               onClick={() => {
                 selection();

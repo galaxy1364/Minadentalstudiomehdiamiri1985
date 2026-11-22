@@ -54,6 +54,13 @@ const VIEW_PALETTES: Record<string, ViewPalette> = {
     c3: 'rgba(132, 204, 22, 0.20)',   // Lime 500
     c4: 'rgba(52, 211, 153, 0.18)'    // Emerald 400
   },
+  // 6B. Treatments & Clinical CDSS: Seafoam Teal, Jade & Turquoise
+  treatments: {
+    c1: 'rgba(13, 148, 136, 0.30)',   // Teal 600
+    c2: 'rgba(34, 197, 94, 0.22)',    // Green 500
+    c3: 'rgba(14, 165, 233, 0.22)',   // Sky 500
+    c4: 'rgba(45, 212, 191, 0.18)'    // Teal 400
+  },
   // 7. AI Assistant: Authentic Gemini Aurora (Cyan, Purple, Electric Blue)
   ai_assistant: {
     c1: 'rgba(56, 189, 248, 0.35)',   // Gemini Cyan
@@ -88,6 +95,27 @@ const VIEW_PALETTES: Record<string, ViewPalette> = {
     c2: 'rgba(14, 165, 233, 0.22)',   // Sky 500
     c3: 'rgba(16, 185, 129, 0.20)',   // Emerald 500
     c4: 'rgba(148, 163, 184, 0.16)'
+  },
+  // 12. Sterilization & Autoclave: Ice Sky, Surgical Aqua & Mint
+  sterilization: {
+    c1: 'rgba(56, 189, 248, 0.30)',   // Sky 400
+    c2: 'rgba(45, 212, 191, 0.26)',   // Teal 400
+    c3: 'rgba(14, 165, 233, 0.22)',   // Sky 500
+    c4: 'rgba(186, 230, 253, 0.24)'   // Sky 200
+  },
+  // 13. Insurance Claims (HL7 FHIR / Sepas): Fuchsia, Orchid & Royal Blue
+  insurance_claims: {
+    c1: 'rgba(217, 70, 239, 0.28)',   // Fuchsia 500
+    c2: 'rgba(99, 102, 241, 0.25)',   // Indigo 500
+    c3: 'rgba(232, 121, 249, 0.22)',  // Fuchsia 400
+    c4: 'rgba(240, 171, 252, 0.18)'   // Fuchsia 300
+  },
+  // 14. Marketing & VIP Club: Ruby Rose, Magenta & Coral
+  marketing: {
+    c1: 'rgba(225, 29, 72, 0.28)',    // Rose 600
+    c2: 'rgba(236, 72, 153, 0.26)',   // Pink 500
+    c3: 'rgba(249, 115, 22, 0.20)',   // Orange 500
+    c4: 'rgba(251, 113, 133, 0.18)'   // Rose 400
   }
 };
 

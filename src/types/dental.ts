@@ -22,6 +22,16 @@ export type TreatmentType =
   | 'fluoride'
   | 'space_maintainer';
 
+export interface ToothConditionHistoryEntry {
+  treatment: TreatmentType;
+  status: 'planned' | 'in_progress' | 'completed';
+  date: string;
+  cost: number;
+  doctorName?: string;
+  notes?: string;
+  surfaces?: ToothSurface[];
+}
+
 export interface ToothCondition {
   quadrant: 'UR' | 'UL' | 'LL' | 'LR';
   toothNumber: number; // 1-8
@@ -29,10 +39,34 @@ export interface ToothCondition {
   treatment: TreatmentType;
   status: 'planned' | 'in_progress' | 'completed';
   notes?: string;
+  surgicalNotes?: string; // یادداشت تخصصی جراحی و روت‌کانال
   cost?: number;
+  baseCost?: number;
+  discountPercent?: number;
   doctorName?: string;
   date?: string;
   annotations?: string; // Freehand drawing canvas overlay (Data URL / PNG)
+  history?: ToothConditionHistoryEntry[];
+  endoMetrics?: {
+    mb1?: string;
+    mb2?: string;
+    ml?: string;
+    dp?: string;
+    masterFile?: string;
+    sealerType?: string;
+  };
+  perioMetrics?: {
+    pockets: Record<'MB' | 'B' | 'DB' | 'ML' | 'L' | 'DL', number>;
+    mobility: '0' | 'I' | 'II' | 'III';
+    bop: boolean;
+  };
+  vitalityMetrics?: {
+    coldTest: 'نرمال' | 'پالپیت برگشت‌پذیر' | 'پالپیت غیرقابل‌برگشت' | 'نکروز (بدون پاسخ)';
+    percussion: 'منفی (-)' | 'مثبت (+)';
+    palpation: 'منفی (-)' | 'مثبت (+)';
+    eptScore: string;
+  };
+  reminderConfig?: ReminderConfig;
 }
 
 export interface SayadCheck {
@@ -47,6 +81,7 @@ export interface SayadCheck {
   status: 'in_collection' | 'cleared' | 'bounced' | 'returned';
   isGuarantee: boolean; // آیا چک ضمانت است؟
   description?: string;
+  reminderConfig?: ReminderConfig;
 }
 
 export interface Installment {
@@ -61,18 +96,22 @@ export interface Installment {
   paidDate?: string;
   status: 'pending' | 'paid' | 'overdue';
   paymentMethod?: 'pos' | 'card_to_card' | 'cash' | 'check';
+  reminderConfig?: ReminderConfig;
 }
 
 export interface PaymentRecord {
   id: string;
   patientId: string;
   patientName: string;
-  amount: number; // Toman
+  amount: number; // Toman (positive for receipt, negative for refund)
   date: string;
   method: 'pos' | 'card_to_card' | 'cash' | 'check';
   referenceNumber?: string;
   terminalName?: string;
   forTreatment: string;
+  isRefund?: boolean;
+  refundedAt?: string;
+  reminderConfig?: ReminderConfig;
 }
 
 export type LabStatus = 'sent' | 'fabrication' | 'frame_try_in' | 'ready_for_clinic' | 'delivered_cemented';
@@ -96,7 +135,11 @@ export interface LabOrder {
   translucency?: string; // میزان ترنسلوسنسی زیرکونیا (HT, MT, LT)
   instructions?: string; // دستورات بالینی پزشک به تکنسین
   courierName?: string; // نام پیک یا کد رهگیری
+  trackingSlipCode?: string; // کد رهگیری قبض ارسال و دریافت مطب
+  receivedAtClinicDate?: string; // تاریخ ورود و دریافت قطعه از لابراتوار در مطب
+  deliveredToPatientDate?: string; // تاریخ تحویل و سمان نهایی روی دندان بیمار
   qcPassed?: boolean; // تایید کنترل کیفی در کلینیک
+  reminderConfig?: ReminderConfig;
 }
 
 export type ImplantStage = 
@@ -121,6 +164,10 @@ export interface ImplantCase {
   healingDueDate: string;
   currentStage: ImplantStage;
   notes: string;
+  sterilePackCode?: string;
+  doctorName?: string;
+  boneDensity?: 'D1' | 'D2' | 'D3' | 'D4';
+  reminderConfig?: ReminderConfig;
 }
 
 export interface PrescriptionItem {
@@ -175,22 +222,101 @@ export interface Patient {
   prescriptions?: DentalPrescription[];
   consents?: PatientConsent[];
   treatments?: any[];
+  clinicalVitals?: {
+    bp: string;
+    pulse: string;
+    spo2: string;
+    asaClass: 'ASA I' | 'ASA II' | 'ASA III';
+    updatedAt?: string;
+  };
+  periodontalBpe?: {
+    S1: number;
+    S2: number;
+    S3: number;
+    S4: number;
+    S5: number;
+    S6: number;
+    plaqueIndexPct: number;
+    updatedAt?: string;
+  };
+  endoMetrics?: {
+    coldTest: 'نرمال (+)' | 'پالپیت حاد (++)' | 'نکروز پالپ (-)';
+    workingLength: string;
+    updatedAt?: string;
+  };
+  insuranceType?: string;
+  recallMonths?: number;
+  nextRecallDate?: string;
   createdAt?: string;
   notes: string;
 }
+
+export type AppointmentStatus =
+  | 'scheduled'
+  | 'waiting'
+  | 'in_chair'
+  | 'completed'
+  | 'cancelled'
+  | 'no_show';
 
 export interface Appointment {
   id: string;
   patientId: string;
   patientName: string;
   phone: string;
-  unit: string; // یونیت ۱، یونیت ۲، اتاق جراحی
+  unit: string; // یونیت آبی، یونیت زرد، یونیت جراحی (پشتیبانی از نام‌های قبلی نیز)
   doctor: string;
   date: string; // e.g. "۱۴۰۵/۰۷/۳۰"
   time: string; // e.g. "۱۶:۳۰"
   durationMinutes: number;
   treatment: string;
-  status: 'scheduled' | 'waiting' | 'in_chair' | 'completed' | 'cancelled';
+  status: AppointmentStatus;
+  waitingStartedAt?: string; // زمان ورود به سالن انتظار برای پایش SLA کمتر از ۲۰ دقیقه
+  chairStartedAt?: string; // زمان دقیق نشستن روی یونیت برای تایمر زنده درمان
+  cancellationReason?: string; // علت لغو یا عدم حضور
+  reminderConfig?: ReminderConfig;
+}
+
+export interface ClinicUnitDefinition {
+  id: string;
+  name: string;
+  doctor: string;
+  accent: string;
+  colorTone?: 'blue' | 'yellow' | 'purple' | 'emerald';
+  borderActive: string;
+  dropActive: string;
+}
+
+export interface CustomHolidayEntry {
+  date: string;
+  reason: string;
+}
+
+export interface ClinicScheduleSettings {
+  openTime: string; // "۰۸:۳۰"
+  closeTime: string; // "۲۲:۰۰"
+  breakEnabled: boolean;
+  breakStart: string; // "۱۳:۳۰"
+  breakEnd: string; // "۱۵:۰۰"
+  blockOfficialHolidays: boolean;
+  doctorOffWeekdays: Record<string, number[]>; // 0=شنبه .. 6=جمعه
+  customHolidays: CustomHolidayEntry[];
+  customHolidayDates?: string[]; // Legacy fallback Jalali YYYY/MM/DD
+}
+
+export interface WaitlistEntry {
+  id: string;
+  patientId?: string;
+  patientName: string;
+  phone: string;
+  preferredUnit: string;
+  preferredDoctor?: string;
+  preferredDate?: string;
+  preferredShift: 'any' | 'morning' | 'afternoon' | 'evening' | 'night';
+  priority?: 'normal' | 'urgent';
+  treatment: string;
+  notes?: string;
+  createdAt: string;
 }
 
 export interface InventoryItem {
@@ -218,6 +344,7 @@ export interface UserAccount {
   avatarColor: string;
   email?: string;
   password?: string;
+  passwordHash?: string;
   phone?: string;
   medicalLicense?: string; // شماره نظام پزشکی
   isActive?: boolean;
@@ -518,3 +645,62 @@ export interface InsuranceClaimCalculation {
   fhirClaimBundleId: string;
 }
 
+export type ReminderTimingPreset =
+  | 'at_time'
+  | '30m_before'
+  | '2h_before'
+  | '1d_before'
+  | '2d_before'
+  | '3d_before'
+  | '1w_before'
+  | 'custom';
+
+export type ReminderChannel = 'phone_push' | 'in_app' | 'sms';
+
+export interface ReminderConfig {
+  enabled: boolean;
+  preset: ReminderTimingPreset;
+  customDate?: string;
+  customTime?: string;
+  channels: ReminderChannel[];
+  note?: string;
+}
+
+export type UnifiedReminderSourceType =
+  | 'appointment'
+  | 'treatment'
+  | 'lab'
+  | 'implant'
+  | 'check'
+  | 'installment'
+  | 'payment'
+  | 'insurance'
+  | 'sterilization'
+  | 'inventory'
+  | 'recall'
+  | 'custom';
+
+export type ReminderRecurrence = 'none' | 'daily' | 'weekly' | 'monthly';
+
+export interface UnifiedReminderRecord {
+  id: string;
+  sourceType: UnifiedReminderSourceType;
+  sourceId?: string;
+  patientId?: string;
+  patientName: string;
+  patientPhone?: string;
+  title: string;
+  description: string;
+  targetDate: string;
+  targetTime?: string;
+  triggerDate: string;
+  triggerTime?: string;
+  channels: ReminderChannel[];
+  status: 'pending' | 'snoozed' | 'done';
+  snoozedUntilMs?: number;
+  recurrence?: ReminderRecurrence;
+  assignedTo?: string;
+  confirmationStatus?: 'unconfirmed' | 'confirmed_by_patient' | 'reschedule_requested';
+  targetView: string;
+  createdAt: string;
+}

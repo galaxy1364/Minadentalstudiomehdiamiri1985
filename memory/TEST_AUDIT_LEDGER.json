@@ -1,0 +1,332 @@
+{
+  "project": "MinaDental (مینادنتال)",
+  "auditEngineVersion": "27.6.0-QA-LOCKED",
+  "generatedAtIso": "2026-11-21T12:24:28.186Z",
+  "summary": {
+    "totalModules": 18,
+    "passedModules": 18,
+    "failedModules": 0,
+    "averageScoreOutOf10": 10,
+    "allCriticalPassed": true
+  },
+  "modules": [
+    {
+      "moduleId": "MD-DSH-1405-1000",
+      "testId": "MD-TST-01",
+      "nameFa": "داشبورد فرماندهی کلینیک",
+      "filePath": "src/components/views/DashboardView.tsx",
+      "kind": "view",
+      "vitestTarget": "MD-TST-01-Dashboard",
+      "requiredTokens": [
+        "dashboard-view",
+        "grid-cols-2",
+        "پذیرش و نوبت‌دهی"
+      ],
+      "exists": true,
+      "score": 10,
+      "status": "PASS",
+      "gaps": [],
+      "warnings": []
+    },
+    {
+      "moduleId": "MD-PAT-1405-1001",
+      "testId": "MD-TST-02",
+      "nameFa": "پرونده بیماران و پذیرش",
+      "filePath": "src/components/views/PatientsListView.tsx",
+      "kind": "view",
+      "vitestTarget": "MD-TST-02-Patients",
+      "requiredTokens": [
+        "پرونده",
+        "overflow-x-hidden"
+      ],
+      "exists": true,
+      "score": 10,
+      "status": "PASS",
+      "gaps": [],
+      "warnings": []
+    },
+    {
+      "moduleId": "MD-APT-1405-1001",
+      "testId": "MD-TST-03",
+      "nameFa": "نوبت‌دهی فوق هوشمند و تقویم جلالی",
+      "filePath": "src/components/views/AppointmentsView.tsx",
+      "kind": "view",
+      "vitestTarget": "MD-TST-03",
+      "requiredTokens": [
+        "یونیت آبی",
+        "یونیت زرد",
+        "یونیت جراحی",
+        "جدول ساعتی یونیت‌ها",
+        "انتقال به لیست انتظار",
+        "سرویس پیامک",
+        "ارسال اتوماتیک",
+        "buildRecurringSessionDates",
+        "calculateUnitCapacityStats",
+        "generateAppointmentsCsvContent"
+      ],
+      "exists": true,
+      "score": 10,
+      "status": "PASS",
+      "gaps": [],
+      "warnings": []
+    },
+    {
+      "moduleId": "MD-PLM-1405-1001",
+      "testId": "MD-TST-04",
+      "nameFa": "چارت دندانی پالمر (بزرگسال و اطفال)",
+      "filePath": "src/components/PalmerChartModal.tsx",
+      "kind": "modal",
+      "vitestTarget": "PalmerChartModal (Industrial Section 12)",
+      "requiredTokens": [
+        "UR",
+        "UL",
+        "LR",
+        "LL",
+        "role=\"dialog\""
+      ],
+      "exists": true,
+      "score": 10,
+      "status": "PASS",
+      "gaps": [],
+      "warnings": []
+    },
+    {
+      "moduleId": "MD-LAB-1405-1001",
+      "testId": "MD-TST-05",
+      "nameFa": "لابراتوار پروتز (ثبت ۲ مرحله‌ای)",
+      "filePath": "src/components/views/LabModuleView.tsx",
+      "kind": "view",
+      "vitestTarget": "MD-TST-05-Lab",
+      "requiredTokens": [
+        "لابراتوار",
+        "overflow-x-hidden"
+      ],
+      "exists": true,
+      "score": 10,
+      "status": "PASS",
+      "gaps": [],
+      "warnings": []
+    },
+    {
+      "moduleId": "MD-IMP-1405-1001",
+      "testId": "MD-TST-06",
+      "nameFa": "کاشت ایمپلنت و جراحی",
+      "filePath": "src/components/views/ImplantModuleView.tsx",
+      "kind": "view",
+      "vitestTarget": "MD-TST-06-Implant",
+      "requiredTokens": [
+        "ایمپلنت",
+        "overflow-x-hidden"
+      ],
+      "exists": true,
+      "score": 10,
+      "status": "PASS",
+      "gaps": [],
+      "warnings": []
+    },
+    {
+      "moduleId": "MD-FIN-1405-1001",
+      "testId": "MD-TST-07",
+      "nameFa": "امور مالی و مطالبات مطب",
+      "filePath": "src/components/views/FinancialView.tsx",
+      "kind": "view",
+      "vitestTarget": "MD-TST-07-Financial",
+      "requiredTokens": [
+        "تومان",
+        "overflow-x-hidden"
+      ],
+      "exists": true,
+      "score": 10,
+      "status": "PASS",
+      "gaps": [],
+      "warnings": []
+    },
+    {
+      "moduleId": "MD-COM-1405-1001",
+      "testId": "MD-TST-08",
+      "nameFa": "سهم کارکرد پزشکان (مستقل از پرداخت)",
+      "filePath": "src/components/DoctorCommissionModal.tsx",
+      "kind": "modal",
+      "vitestTarget": "DoctorCommissionModal (Industrial Section 4 & 13)",
+      "requiredTokens": [
+        "queryMaterializedDoctorCommissionLedger",
+        "role=\"dialog\""
+      ],
+      "exists": true,
+      "score": 10,
+      "status": "PASS",
+      "gaps": [],
+      "warnings": []
+    },
+    {
+      "moduleId": "MD-CHK-1405-1001",
+      "testId": "MD-TST-09",
+      "nameFa": "چک صیادی و چک ضمانت",
+      "filePath": "src/components/AddCheckModal.tsx",
+      "kind": "modal",
+      "vitestTarget": "AddCheckModal (Industrial Section 12)",
+      "requiredTokens": [
+        "صیادی",
+        "role=\"dialog\""
+      ],
+      "exists": true,
+      "score": 10,
+      "status": "PASS",
+      "gaps": [],
+      "warnings": []
+    },
+    {
+      "moduleId": "MD-INS-1405-1001",
+      "testId": "MD-TST-10",
+      "nameFa": "اقساط درمانی",
+      "filePath": "src/components/InstallmentPlanModal.tsx",
+      "kind": "modal",
+      "vitestTarget": "InstallmentPlanModal (Industrial Section 13)",
+      "requiredTokens": [
+        "قسط",
+        "role=\"dialog\""
+      ],
+      "exists": true,
+      "score": 10,
+      "status": "PASS",
+      "gaps": [],
+      "warnings": []
+    },
+    {
+      "moduleId": "MD-INV-1405-1001",
+      "testId": "MD-TST-11",
+      "nameFa": "انبار متریال و هشدار کسری",
+      "filePath": "src/components/views/InventoryView.tsx",
+      "kind": "view",
+      "vitestTarget": "MD-TST-11-Inventory",
+      "requiredTokens": [
+        "انبار",
+        "overflow-x-hidden"
+      ],
+      "exists": true,
+      "score": 10,
+      "status": "PASS",
+      "gaps": [],
+      "warnings": []
+    },
+    {
+      "moduleId": "MD-STR-1405-1001",
+      "testId": "MD-TST-12",
+      "nameFa": "استریلیزاسیون و اتوکلاو",
+      "filePath": "src/components/views/SterilizationModuleView.tsx",
+      "kind": "view",
+      "vitestTarget": "MD-TST-12-Sterilization",
+      "requiredTokens": [
+        "اتوکلاو",
+        "overflow-x-hidden"
+      ],
+      "exists": true,
+      "score": 10,
+      "status": "PASS",
+      "gaps": [],
+      "warnings": []
+    },
+    {
+      "moduleId": "MD-XRY-1405-1001",
+      "testId": "MD-TST-13",
+      "nameFa": "رادیولوژی OPG & RVG",
+      "filePath": "src/components/views/XRayModuleView.tsx",
+      "kind": "view",
+      "vitestTarget": "MD-TST-13-XRay",
+      "requiredTokens": [
+        "CBCT",
+        "overflow-x-hidden"
+      ],
+      "exists": true,
+      "score": 10,
+      "status": "PASS",
+      "gaps": [],
+      "warnings": []
+    },
+    {
+      "moduleId": "MD-REM-1405-1001",
+      "testId": "MD-TST-14",
+      "nameFa": "یادآوری هوشمند و اعلان گوشی",
+      "filePath": "src/components/views/RemindersView.tsx",
+      "kind": "view",
+      "vitestTarget": "MD-TST-14-Reminders",
+      "requiredTokens": [
+        "یادآوری",
+        "overflow-x-hidden"
+      ],
+      "exists": true,
+      "score": 10,
+      "status": "PASS",
+      "gaps": [],
+      "warnings": []
+    },
+    {
+      "moduleId": "MD-MKT-1405-1001",
+      "testId": "MD-TST-15",
+      "nameFa": "باشگاه مشتریان و تبلیغات",
+      "filePath": "src/components/views/MarketingCampaignsView.tsx",
+      "kind": "view",
+      "vitestTarget": "MD-TST-15-Marketing",
+      "requiredTokens": [
+        "کمپین",
+        "overflow-x-hidden"
+      ],
+      "exists": true,
+      "score": 10,
+      "status": "PASS",
+      "gaps": [],
+      "warnings": []
+    },
+    {
+      "moduleId": "MD-CLM-1405-1001",
+      "testId": "MD-TST-16",
+      "nameFa": "بیمه پایه و تکمیلی",
+      "filePath": "src/components/views/InsuranceClaimsView.tsx",
+      "kind": "view",
+      "vitestTarget": "MD-TST-16-Insurance",
+      "requiredTokens": [
+        "بیمه",
+        "overflow-x-hidden"
+      ],
+      "exists": true,
+      "score": 10,
+      "status": "PASS",
+      "gaps": [],
+      "warnings": []
+    },
+    {
+      "moduleId": "MD-AIA-1405-1001",
+      "testId": "MD-TST-17",
+      "nameFa": "هوش مصنوعی تشخیصی",
+      "filePath": "src/components/views/AiAssistantView.tsx",
+      "kind": "view",
+      "vitestTarget": "MD-TST-17-AI",
+      "requiredTokens": [
+        "هوش مصنوعی",
+        "overflow-x-hidden"
+      ],
+      "exists": true,
+      "score": 10,
+      "status": "PASS",
+      "gaps": [],
+      "warnings": []
+    },
+    {
+      "moduleId": "MD-SET-1405-1001",
+      "testId": "MD-TST-18",
+      "nameFa": "تنظیمات تعرفه‌ها، پرسنل و بک‌آپ ابری",
+      "filePath": "src/components/views/SettingsView.tsx",
+      "kind": "view",
+      "vitestTarget": "MD-TST-18-Settings",
+      "requiredTokens": [
+        "تعرفه‌ها",
+        "overflow-x-hidden"
+      ],
+      "exists": true,
+      "score": 10,
+      "status": "PASS",
+      "gaps": [],
+      "warnings": []
+    }
+  ]
+}

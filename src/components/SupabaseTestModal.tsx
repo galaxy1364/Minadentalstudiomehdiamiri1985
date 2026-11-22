@@ -6,6 +6,10 @@ import {
 } from 'lucide-react';
 import { supabaseService, SupabaseTestResult } from '../services/supabaseService';
 import { toPersianDigits } from '../utils/jalali';
+import { ViewportModalPortal } from './ViewportModalPortal';
+import { TrackableIdBadge } from './TrackableIdBadge';
+import { useEscapeKey } from '../hooks/useDialogA11y';
+import { copyTextSafely } from '../utils/clipboard';
 
 interface SupabaseTestModalProps {
   isOpen: boolean;
@@ -17,12 +21,14 @@ export const SupabaseTestModal: React.FC<SupabaseTestModalProps> = ({
   onClose
 }) => {
   const [activeTab, setActiveTab] = useState<'tests' | 'config' | 'schema'>('tests');
+  useEscapeKey(isOpen, onClose);
   const [testResults, setTestResults] = useState<SupabaseTestResult[]>([]);
   const [isRunningAll, setIsRunningAll] = useState<boolean>(false);
   const [copiedSql, setCopiedSql] = useState<boolean>(false);
   const [config, setConfig] = useState(supabaseService.getConfig());
   const [inputUrl, setInputUrl] = useState(config.url);
   const [inputKey, setInputKey] = useState(config.anonKey);
+  const [configError, setConfigError] = useState<string | null>(null);
   const [expandedPayloadId, setExpandedPayloadId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -56,18 +62,24 @@ export const SupabaseTestModal: React.FC<SupabaseTestModalProps> = ({
 
   const handleCopySql = () => {
     const sql = supabaseService.getSqlSchema();
-    navigator.clipboard.writeText(sql);
+    void copyTextSafely(sql);
     setCopiedSql(true);
     setTimeout(() => setCopiedSql(false), 2500);
   };
 
   const handleSaveConfig = () => {
-    supabaseService.updateConfig(inputUrl, inputKey);
+    const result = supabaseService.updateConfig(inputUrl, inputKey);
+    if (!result.ok) {
+      setConfigError(result.error || 'تنظیمات اتصال نامعتبر است.');
+      return;
+    }
+    setConfigError(null);
     setConfig(supabaseService.getConfig());
     handleRunAllTests();
   };
 
   const handleResetConfig = () => {
+    setConfigError(null);
     supabaseService.resetToDefaultConfig();
     const cfg = supabaseService.getConfig();
     setConfig(cfg);
@@ -80,11 +92,15 @@ export const SupabaseTestModal: React.FC<SupabaseTestModalProps> = ({
   const totalCount = testResults.length;
 
   return (
-    <div 
-      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-emerald-950/25 backdrop-blur-xs animate-fade-in"
-      dir="rtl"
-    >
-      <div className="relative w-full max-w-2xl bg-gradient-to-b from-emerald-50/90 via-white to-teal-50/50 border border-emerald-200/90 rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh] text-slate-900">
+    <ViewportModalPortal isOpen={isOpen}>
+      <div 
+        role="dialog"
+        aria-modal="true"
+        aria-label="مرکز آزمون و پیکربندی سوپابیس"
+        className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-emerald-950/25 backdrop-blur-xs animate-fade-in"
+        dir="rtl"
+      >
+        <div className="relative w-full max-w-2xl bg-gradient-to-b from-emerald-50/90 via-white to-teal-50/50 border border-emerald-200/90 rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh] text-slate-900">
         
         {/* Header */}
         <div className="p-4 sm:p-5 border-b border-emerald-100 bg-gradient-to-l from-emerald-100/80 via-white to-teal-50/70 flex items-center justify-between shrink-0">
@@ -108,8 +124,10 @@ export const SupabaseTestModal: React.FC<SupabaseTestModalProps> = ({
           </div>
 
           <button
+            type="button"
             onClick={onClose}
-            className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-800 flex items-center justify-center transition-all"
+            aria-label="بستن پنجره تست سوپابیس"
+            className="min-w-[38px] min-h-[38px] rounded-[12px] bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-slate-900 flex items-center justify-center transition-all shrink-0 cursor-pointer"
           >
             <X className="w-4 h-4" />
           </button>
@@ -117,7 +135,7 @@ export const SupabaseTestModal: React.FC<SupabaseTestModalProps> = ({
 
         {/* Navigation Tabs */}
         <div className="px-4 pt-3 border-b border-slate-200 bg-slate-50/80 flex items-center gap-2 shrink-0">
-          <button
+          <button type="button"
             onClick={() => setActiveTab('tests')}
             className={`px-3.5 py-2 text-xs font-bold rounded-t-xl transition-all flex items-center gap-1.5 ${
               activeTab === 'tests'
@@ -134,7 +152,7 @@ export const SupabaseTestModal: React.FC<SupabaseTestModalProps> = ({
             )}
           </button>
 
-          <button
+          <button type="button"
             onClick={() => setActiveTab('config')}
             className={`px-3.5 py-2 text-xs font-bold rounded-t-xl transition-all flex items-center gap-1.5 ${
               activeTab === 'config'
@@ -146,7 +164,7 @@ export const SupabaseTestModal: React.FC<SupabaseTestModalProps> = ({
             تنظیمات اتصال سرور
           </button>
 
-          <button
+          <button type="button"
             onClick={() => setActiveTab('schema')}
             className={`px-3.5 py-2 text-xs font-bold rounded-t-xl transition-all flex items-center gap-1.5 ${
               activeTab === 'schema'
@@ -171,14 +189,14 @@ export const SupabaseTestModal: React.FC<SupabaseTestModalProps> = ({
                 <div>
                   <h3 className="text-sm font-black text-slate-900 flex items-center gap-2">
                     <ShieldCheck className="w-4 h-4 text-emerald-600" />
-                    تست خودکار و سنجش سلامت ۸ ماژول کلینیک
+                    تست خودکار ۱۱ ماژول زنده و Materialized Views (500k+)
                   </h3>
                   <p className="text-xs text-slate-600 mt-1 font-medium">
-                    درج، استعلام، به‌روزرسانی و وب‌سوکت بلادرنگ کلیه ماژول‌ها با ثبت تأخیر (ms) آزمایش می‌شوند.
+                    درج، استعلام، ویوهای مادی‌شده مالی (CONCURRENT REFRESH)، دقت ۱0⁻⁶ و وب‌سوکت بلادرنگ آزمایش می‌شوند.
                   </p>
                 </div>
 
-                <button
+                <button type="button"
                   onClick={handleRunAllTests}
                   disabled={isRunningAll}
                   className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-black text-xs flex items-center justify-center gap-2 transition-all shadow-md shadow-emerald-600/25 disabled:opacity-50 shrink-0"
@@ -228,10 +246,11 @@ export const SupabaseTestModal: React.FC<SupabaseTestModalProps> = ({
                             <AlertTriangle className="w-4 h-4 text-red-500 shrink-0" />
                           )}
                           <div>
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 flex-wrap">
                               <span className="text-xs font-black text-slate-900">
                                 {test.title}
                               </span>
+                              <TrackableIdBadge recordId={test.id} moduleKey="patients" variant="emerald" />
                               <span className="text-[10px] px-2 py-0.5 rounded-full bg-white text-slate-600 border border-slate-200 font-bold">
                                 {test.moduleName}
                               </span>
@@ -252,7 +271,7 @@ export const SupabaseTestModal: React.FC<SupabaseTestModalProps> = ({
                       {/* Sample Payload Inspector */}
                       {test.payloadSample && (
                         <div className="mt-1 pt-2 border-t border-slate-200">
-                          <button
+                          <button type="button"
                             onClick={() => setExpandedPayloadId(expandedPayloadId === test.id ? null : test.id)}
                             className="text-[10px] text-emerald-700 hover:text-emerald-800 flex items-center gap-1 font-bold"
                           >
@@ -323,16 +342,23 @@ export const SupabaseTestModal: React.FC<SupabaseTestModalProps> = ({
                     />
                   </div>
 
+                  {configError && (
+                    <div role="alert" className="p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-bold flex items-center gap-2">
+                      <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+                      <span>{configError}</span>
+                    </div>
+                  )}
+
                   <div className="flex items-center justify-end gap-2 pt-2">
                     {config.isCustom && (
-                      <button
+                      <button type="button"
                         onClick={handleResetConfig}
                         className="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-medium transition-all"
                       >
                         بازگشت به پیش‌فرض
                       </button>
                     )}
-                    <button
+                    <button type="button"
                       onClick={handleSaveConfig}
                       className="px-4 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-black text-xs transition-all shadow-md shadow-emerald-600/25"
                     >
@@ -354,7 +380,7 @@ export const SupabaseTestModal: React.FC<SupabaseTestModalProps> = ({
                     جداول، کلیدها، امنیت RLS و کانال‌های بلادرنگ آماده برای اجرا در SQL Editor سوپابیس
                   </p>
                 </div>
-                <button
+                <button type="button"
                   onClick={handleCopySql}
                   className="px-3.5 py-1.5 rounded-xl bg-emerald-100 hover:bg-emerald-200 text-emerald-800 border border-emerald-300 text-xs font-black flex items-center gap-1.5 transition-all active:scale-95 shrink-0"
                 >
@@ -385,11 +411,11 @@ export const SupabaseTestModal: React.FC<SupabaseTestModalProps> = ({
         {/* Footer */}
         <div className="p-3.5 sm:p-4 border-t border-slate-200 bg-slate-50 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2 text-xs text-slate-600 font-medium">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+            <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
             <span>پایگاه‌داده فعال و آماده همگام‌سازی ابری</span>
           </div>
 
-          <button
+          <button type="button"
             onClick={onClose}
             className="px-4 py-1.5 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold text-xs transition-all active:scale-95"
           >
@@ -397,7 +423,8 @@ export const SupabaseTestModal: React.FC<SupabaseTestModalProps> = ({
           </button>
         </div>
 
+        </div>
       </div>
-    </div>
+    </ViewportModalPortal>
   );
 };

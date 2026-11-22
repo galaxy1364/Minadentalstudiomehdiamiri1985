@@ -55,7 +55,7 @@ export const SyncNotificationToast: React.FC<SyncNotificationToastProps> = ({
               </span>
             </div>
 
-            <button
+            <button type="button"
               onClick={() => {
                 triggerHaptic('light');
                 onDismiss();
@@ -81,7 +81,7 @@ export const SyncNotificationToast: React.FC<SyncNotificationToastProps> = ({
               </span>
 
               {onActionClick && (
-                <button
+                <button type="button"
                   onClick={() => {
                     triggerHaptic('medium');
                     onActionClick(event);

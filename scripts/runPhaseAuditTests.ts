@@ -12,6 +12,7 @@ import { undoManager } from '../src/utils/undoManager';
 import { getNextFileNumber, parseFileNumber } from '../src/utils/fileNumber';
 import { indexedDbService } from '../src/services/indexedDbService';
 import { INITIAL_USERS } from '../src/services/syncEngine';
+import { verifyPasswordCredential } from '../src/utils/authCrypto';
 import { 
   validateIranianNationalCode, 
   validateSterilizationCycle, 
@@ -552,7 +553,11 @@ async function runAllPhaseTests() {
 
   // T7.4: Staff email & password authentication & RBAC matrix
   const doctorAccount = INITIAL_USERS.find(u => u.username === 'dr_amiri');
-  const isDoctorAuthed = doctorAccount && doctorAccount.email === 'mehdi.amiri19851364@gmail.com' && doctorAccount.password === 'amiri@dental2025';
+  const isDoctorAuthed =
+    doctorAccount &&
+    doctorAccount.email === 'mehdi.amiri19851364@gmail.com' &&
+    verifyPasswordCredential('amiri@dental2025', doctorAccount) &&
+    !doctorAccount.password;
   const hasDoctorRbac = doctorAccount && doctorAccount.permissions.canRegisterTreatments === true && doctorAccount.permissions.canManageAppointments === true;
   assert(
     !!(isDoctorAuthed && hasDoctorRbac),
@@ -942,7 +947,9 @@ async function runAllPhaseTests() {
 
   // T13.3: Manager RBAC authorization for other doctors and staff
   const otherStaff = INITIAL_USERS.filter(u => u.id !== managerAccount?.id);
-  const allStaffHavePasswords = otherStaff.every(u => !!u.password && u.password.length >= 6);
+  const allStaffHavePasswords = otherStaff.every(
+    u => !u.password && !!u.passwordHash && u.passwordHash.startsWith('sha256$')
+  );
   const allStaffHaveAssignedUnits = otherStaff.every(u => !!u.assignedPlatform);
   assert(
     allStaffHavePasswords && allStaffHaveAssignedUnits && otherStaff.length >= 3,

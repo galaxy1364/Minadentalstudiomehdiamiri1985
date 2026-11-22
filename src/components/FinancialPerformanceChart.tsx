@@ -95,38 +95,38 @@ export const FinancialPerformanceChart: React.FC<FinancialPerformanceChartProps>
       const isAbove = diff >= 0;
 
       return (
-        <div className="bg-[#0b1218]/95 backdrop-blur-xl border border-emerald-500/40 p-3 rounded-2xl shadow-2xl text-white text-xs space-y-1.5 min-w-[210px] z-50">
-          <div className="flex items-center justify-between pb-1.5 border-b border-slate-800">
-            <span className="font-black text-slate-200">{data.dateStr}</span>
-            <span className="text-[10px] text-slate-400 font-mono">
+        <div className="bg-white/98 backdrop-blur-xl border border-amber-300 p-3 rounded-2xl shadow-xl text-slate-900 text-xs space-y-1.5 min-w-[210px] z-50">
+          <div className="flex items-center justify-between pb-1.5 border-b border-amber-100">
+            <span className="font-black text-slate-900">{data.dateStr}</span>
+            <span className="text-[10px] text-amber-800 bg-amber-50 px-2 py-0.5 rounded-md font-mono font-bold">
               {toPersianDigits(data.treatmentsCount)} ویزیت
             </span>
           </div>
 
           <div className="space-y-1">
             <div className="flex items-center justify-between">
-              <span className="text-slate-400 text-[11px] flex items-center gap-1">
-                <span className="w-2 h-2 rounded-full bg-[#c8ff00]" />
+              <span className="text-slate-600 text-[11px] flex items-center gap-1">
+                <span className="w-2 h-2 rounded-full bg-emerald-500" />
                 درآمد روز:
               </span>
-              <span className="font-mono font-black text-sm text-[#c8ff00]">
+              <span className="font-mono font-black text-sm text-emerald-700">
                 {formatToman(data.revenue)}
               </span>
             </div>
 
             <div className="flex items-center justify-between">
-              <span className="text-slate-400 text-[11px] flex items-center gap-1">
-                <span className="w-2 h-2 rounded-full bg-cyan-400" />
+              <span className="text-slate-500 text-[11px] flex items-center gap-1">
+                <span className="w-2 h-2 rounded-full bg-sky-500" />
                 میانگین تاریخی:
               </span>
-              <span className="font-mono text-slate-300 font-bold text-[11px]">
+              <span className="font-mono text-slate-700 font-bold text-[11px]">
                 {formatToman(data.historicalAvg)}
               </span>
             </div>
 
-            <div className="flex items-center justify-between pt-1 border-t border-slate-800/80 text-[10px]">
-              <span className="text-slate-400">فاصله از میانگین:</span>
-              <span className={`font-mono font-bold ${isAbove ? 'text-emerald-400' : 'text-rose-400'}`}>
+            <div className="flex items-center justify-between pt-1 border-t border-slate-100 text-[10px]">
+              <span className="text-slate-500">فاصله از میانگین:</span>
+              <span className={`font-mono font-bold ${isAbove ? 'text-emerald-700' : 'text-rose-600'}`}>
                 {isAbove ? '+' : ''}{toPersianDigits(diffPct)}٪ ({formatToman(Math.abs(diff))})
               </span>
             </div>
@@ -138,45 +138,32 @@ export const FinancialPerformanceChart: React.FC<FinancialPerformanceChartProps>
   };
 
   return (
-    <div className="w-full bg-[#0a1117] border border-emerald-950/60 rounded-[26px] p-3.5 sm:p-4 text-white shadow-xl relative overflow-hidden select-none space-y-3.5">
-      
-      {/* Background neon ambient lights */}
-      <div className="absolute top-0 right-1/4 w-48 h-48 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
-      <div className="absolute bottom-0 left-10 w-44 h-44 bg-[#c8ff00]/5 rounded-full blur-3xl pointer-events-none" />
-
+    <div className="w-full bg-gradient-to-br from-amber-50/90 via-white to-emerald-50/70 border border-amber-200/90 rounded-[26px] p-3.5 sm:p-4 text-slate-900 shadow-sm relative overflow-hidden select-none space-y-3.5">
       {/* Top Header & Range Switcher */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pb-3 border-b border-slate-800/80 relative z-10">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pb-3 border-b border-amber-200/70 relative z-10">
         <div className="flex items-center gap-2.5">
-          <div className="w-9 h-9 rounded-2xl bg-emerald-500/20 border border-emerald-500/40 text-[#c8ff00] flex items-center justify-center shrink-0 shadow-2xs">
+          <div className="w-9 h-9 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 text-white flex items-center justify-center shrink-0 shadow-xs">
             <TrendingUp className="w-5 h-5 stroke-[2.4]" />
           </div>
           <div>
-            <div className="flex items-center gap-2">
-              <h3 className="text-xs sm:text-sm font-black text-white">روند درآمد ۳۰ روزه در مقایسه با میانگین تاریخی</h3>
-              <span className="text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-2 py-0.2 rounded-full font-mono font-bold">
-                Dark Analytics
-              </span>
-            </div>
-            <span className="text-[10.5px] text-slate-400">
-              تحلیل عملکرد مالی کلینیک مینادنتال بر مبنای وصولی نقد، POS و چک‌های تسویه‌شده
-            </span>
+            <h3 className="text-xs sm:text-sm font-black text-slate-900">روند درآمد ۳۰ روزه کلینیک</h3>
           </div>
         </div>
 
         {/* Time Range Selector */}
         <div className="flex items-center gap-1.5 self-end sm:self-auto">
-          <div className="flex items-center bg-slate-900/90 p-0.5 rounded-xl border border-slate-800 text-[10.5px] font-bold">
+          <div className="flex items-center bg-amber-100/70 p-0.5 rounded-xl border border-amber-200 text-[10.5px] font-bold">
             {(['30', '15', '7'] as const).map(range => (
-              <button
+              <button type="button"
                 key={range}
                 onClick={() => {
                   selection();
                   setTimeRange(range);
                 }}
-                className={`py-1 px-2.5 rounded-lg transition-all ${
+                className={`py-1 px-2.5 rounded-lg transition-all cursor-pointer ${
                   timeRange === range
-                    ? 'bg-[#c8ff00] text-black font-black shadow-xs'
-                    : 'text-slate-400 hover:text-white'
+                    ? 'bg-amber-600 text-white font-black shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
                 {range === '30' ? '۳۰ روز' : range === '15' ? '۱۵ روز' : '۷ روز'}
@@ -184,54 +171,54 @@ export const FinancialPerformanceChart: React.FC<FinancialPerformanceChartProps>
             ))}
           </div>
 
-          <button
+          <button type="button"
             onClick={() => {
               impactLight();
               setShowBaseline(!showBaseline);
             }}
-            className={`py-1 px-2 rounded-xl text-[10.5px] font-bold border transition-all flex items-center gap-1 ${
+            className={`py-1 px-2.5 rounded-xl text-[10.5px] font-bold border transition-all flex items-center gap-1 cursor-pointer ${
               showBaseline 
-                ? 'bg-cyan-500/15 border-cyan-500/40 text-cyan-300' 
-                : 'bg-white/5 border-white/10 text-slate-400'
+                ? 'bg-sky-100 border-sky-300 text-sky-900' 
+                : 'bg-white border-slate-200 text-slate-500'
             }`}
             title="نمایش یا پنهان‌سازی خط مبنای تاریخی"
           >
-            <span className="w-2 h-2 rounded-full bg-cyan-400" />
+            <span className="w-2 h-2 rounded-full bg-sky-500" />
             <span>خط میانگین</span>
           </button>
         </div>
       </div>
 
-      {/* 4 Summary Metric Cards (Pure Dark Aesthetic) */}
+      {/* 4 Summary Metric Cards (Bright Pastel Aesthetic) */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 relative z-10">
-        <div className="p-2.5 rounded-2xl bg-white/5 border border-white/10 space-y-0.5">
-          <span className="text-[10px] text-slate-400 block">درآمد کل دوره ({timeRange} روز)</span>
-          <span className="text-xs sm:text-sm font-black font-mono text-[#c8ff00] block truncate">
+        <div className="p-2.5 rounded-2xl bg-emerald-50/80 border border-emerald-200/80 space-y-0.5">
+          <span className="text-[10px] text-emerald-800 font-bold block">درآمد کل دوره ({toPersianDigits(timeRange)} روز)</span>
+          <span className="text-xs sm:text-sm font-black font-mono text-emerald-950 block truncate">
             {formatToman(totalRevenue)}
           </span>
         </div>
 
-        <div className="p-2.5 rounded-2xl bg-white/5 border border-white/10 space-y-0.5">
-          <span className="text-[10px] text-slate-400 block">میانگین روزانه فعلی</span>
-          <span className="text-xs sm:text-sm font-black font-mono text-emerald-400 block truncate">
+        <div className="p-2.5 rounded-2xl bg-amber-50/80 border border-amber-200/80 space-y-0.5">
+          <span className="text-[10px] text-amber-800 font-bold block">میانگین روزانه فعلی</span>
+          <span className="text-xs sm:text-sm font-black font-mono text-amber-950 block truncate">
             {formatToman(currentDailyAvg)}
           </span>
         </div>
 
-        <div className="p-2.5 rounded-2xl bg-white/5 border border-white/10 space-y-0.5">
-          <span className="text-[10px] text-slate-400 block">میانگین تاریخی مبنا</span>
-          <span className="text-xs sm:text-sm font-black font-mono text-cyan-300 block truncate">
+        <div className="p-2.5 rounded-2xl bg-sky-50/80 border border-sky-200/80 space-y-0.5">
+          <span className="text-[10px] text-sky-800 font-bold block">میانگین تاریخی مبنا</span>
+          <span className="text-xs sm:text-sm font-black font-mono text-sky-950 block truncate">
             {formatToman(HISTORICAL_DAILY_AVG)}
           </span>
         </div>
 
-        <div className="p-2.5 rounded-2xl bg-white/5 border border-white/10 space-y-0.5">
-          <span className="text-[10px] text-slate-400 block">عملکرد نسبت به میانگین</span>
+        <div className="p-2.5 rounded-2xl bg-purple-50/80 border border-purple-200/80 space-y-0.5">
+          <span className="text-[10px] text-purple-800 font-bold block">عملکرد نسبت به میانگین</span>
           <div className="flex items-center gap-1">
-            <span className={`text-xs sm:text-sm font-black font-mono ${isPositiveGrowth ? 'text-emerald-400' : 'text-rose-400'}`}>
+            <span className={`text-xs sm:text-sm font-black font-mono ${isPositiveGrowth ? 'text-emerald-700' : 'text-rose-700'}`}>
               {isPositiveGrowth ? '+' : ''}{toPersianDigits(growthRate)}٪
             </span>
-            <span className="text-[9px] text-slate-400">
+            <span className="text-[9px] text-purple-700 font-bold">
               {isPositiveGrowth ? 'رشد عملکرد' : 'افت'}
             </span>
           </div>
@@ -247,31 +234,30 @@ export const FinancialPerformanceChart: React.FC<FinancialPerformanceChartProps>
               margin={{ top: 15, right: 10, left: -15, bottom: 0 }}
             >
               <defs>
-                {/* Smooth Neon Lime to Emerald Area Gradient */}
-                <linearGradient id="revenueDarkGradient" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#c8ff00" stopOpacity={0.45} />
-                  <stop offset="65%" stopColor="#10b981" stopOpacity={0.12} />
-                  <stop offset="95%" stopColor="#059669" stopOpacity={0.0} />
+                <linearGradient id="revenueBrightGradient" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#10b981" stopOpacity={0.35} />
+                  <stop offset="65%" stopColor="#f59e0b" stopOpacity={0.12} />
+                  <stop offset="95%" stopColor="#10b981" stopOpacity={0.0} />
                 </linearGradient>
               </defs>
 
               <CartesianGrid 
                 strokeDasharray="3 3" 
-                stroke="#1e293b" 
+                stroke="#e2e8f0" 
                 vertical={false} 
               />
 
               <XAxis 
                 dataKey="shortLabel" 
-                tick={{ fill: '#94a3b8', fontSize: 10, fontFamily: 'Vazirmatn' }} 
-                stroke="#334155" 
+                tick={{ fill: '#475569', fontSize: 10, fontFamily: 'Vazirmatn' }} 
+                stroke="#cbd5e1" 
                 tickLine={false}
                 interval={timeRange === '30' ? 4 : timeRange === '15' ? 2 : 0}
               />
 
               <YAxis 
-                tick={{ fill: '#94a3b8', fontSize: 9.5, fontFamily: 'Vazirmatn, monospace' }} 
-                stroke="#334155" 
+                tick={{ fill: '#475569', fontSize: 9.5, fontFamily: 'Vazirmatn, monospace' }} 
+                stroke="#cbd5e1" 
                 tickLine={false}
                 tickFormatter={(value) => `${toPersianDigits(Math.round(value / 1000000))} م`}
                 domain={['auto', 'auto']}
@@ -279,16 +265,15 @@ export const FinancialPerformanceChart: React.FC<FinancialPerformanceChartProps>
 
               <Tooltip content={<CustomDarkTooltip />} />
 
-              {/* Baseline Reference Line if toggled */}
               {showBaseline && (
                 <ReferenceLine 
                   y={HISTORICAL_DAILY_AVG} 
-                  stroke="#38bdf8" 
+                  stroke="#0284c7" 
                   strokeDasharray="4 4" 
                   strokeWidth={1.8}
                   label={{
                     value: `مبنا: ${formatToman(HISTORICAL_DAILY_AVG)}`,
-                    fill: '#38bdf8',
+                    fill: '#0369a1',
                     fontSize: 9.5,
                     fontFamily: 'Vazirmatn',
                     position: 'insideTopLeft'
@@ -296,24 +281,22 @@ export const FinancialPerformanceChart: React.FC<FinancialPerformanceChartProps>
                 />
               )}
 
-              {/* 30-Day Revenue Trend Area */}
               <Area 
                 type="monotone" 
                 dataKey="revenue" 
                 name="درآمد روزانه"
-                stroke="#c8ff00" 
-                strokeWidth={2.4} 
+                stroke="#059669" 
+                strokeWidth={2.5} 
                 fillOpacity={1} 
-                fill="url(#revenueDarkGradient)" 
+                fill="url(#revenueBrightGradient)" 
               />
 
-              {/* Historical Average comparison line */}
               {showBaseline && (
                 <Line
                   type="monotone"
                   dataKey="historicalAvg"
                   name="میانگین تاریخی"
-                  stroke="#38bdf8"
+                  stroke="#0284c7"
                   strokeWidth={1.5}
                   strokeDasharray="3 3"
                   dot={false}
@@ -326,16 +309,16 @@ export const FinancialPerformanceChart: React.FC<FinancialPerformanceChartProps>
       </div>
 
       {/* Footer Insight Note */}
-      <div className="flex items-center justify-between pt-2 border-t border-slate-800/80 text-[10.5px] text-slate-400 relative z-10">
+      <div className="flex items-center justify-between pt-2 border-t border-amber-200/60 text-[10.5px] text-slate-600 relative z-10">
         <div className="flex items-center gap-1.5">
-          <Sparkles className="w-3.5 h-3.5 text-[#c8ff00]" />
+          <Sparkles className="w-3.5 h-3.5 text-amber-600" />
           <span>
-            روز اوج درآمد: <b className="font-mono text-white">{peakDay?.shortLabel}</b> با <b className="font-mono text-[#c8ff00]">{formatToman(peakDay?.revenue || 0)}</b>
+            روز اوج درآمد: <b className="font-mono text-slate-900">{peakDay?.shortLabel}</b> با <b className="font-mono text-emerald-700">{formatToman(peakDay?.revenue || 0)}</b>
           </span>
         </div>
 
-        <span className="font-mono text-[10px] text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-md border border-emerald-500/20">
-          دیتای سینک‌شده با صندوق کلینیک
+        <span className="font-bold text-[10px] text-emerald-800 bg-emerald-100/80 px-2.5 py-0.5 rounded-full border border-emerald-200">
+          تطبیق با صندوق کلینیک
         </span>
       </div>
     </div>

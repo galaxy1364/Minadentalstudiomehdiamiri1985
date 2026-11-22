@@ -50,7 +50,18 @@ export const INITIAL_PATIENTS: Patient[] = [
         notes: 'فیکسچر کاشته شده، در انتظار موعد هیلینگ',
         cost: 18000000,
         doctorName: 'دکتر مهدی امیری',
-        date: pastMonth
+        date: pastMonth,
+        history: [
+          {
+            treatment: 'extraction',
+            status: 'completed',
+            date: pastTwoMonths,
+            cost: 1800000,
+            doctorName: 'دکتر مهدی امیری',
+            notes: 'کشیدن آتروماتیک ریشه باقی‌مانده و پودر استخوان',
+            surfaces: ['occlusal', 'rootCanal']
+          }
+        ]
       },
       'UR_5': {
         quadrant: 'UR',
@@ -61,7 +72,27 @@ export const INITIAL_PATIENTS: Patient[] = [
         notes: 'قالب‌گیری ارسال به لابراتوار',
         cost: 6500000,
         doctorName: 'دکتر مهدی امیری',
-        date: pastTenDays
+        date: pastTenDays,
+        history: [
+          {
+            treatment: 'composite',
+            status: 'completed',
+            date: pastTwoWeeks,
+            cost: 1900000,
+            doctorName: 'دکتر مهدی امیری',
+            notes: 'بیلدآپ تاجی و بازسازی دیواره کامپوزیتی',
+            surfaces: ['occlusal', 'mesial', 'distal']
+          },
+          {
+            treatment: 'endo',
+            status: 'completed',
+            date: pastMonth,
+            cost: 4200000,
+            doctorName: 'دکتر سارا نوری',
+            notes: 'درمان ریشه تخصصی ۲ کانال و آبچوریشن',
+            surfaces: ['rootCanal', 'occlusal']
+          }
+        ]
       },
       'LL_6': {
         quadrant: 'LL',
@@ -200,7 +231,7 @@ export const INITIAL_PATIENTS: Patient[] = [
         date: pastMonth,
         method: 'pos',
         referenceNumber: '۷۲۸۴۹۱۲۸',
-        terminalName: 'دستگاه کارتخوان سامان یونیت ۱',
+        terminalName: 'دستگاه کارتخوان سامان یونیت آبی',
         forTreatment: 'پیش‌پرداخت جراحی ایمپلنت'
       },
       {
@@ -248,7 +279,7 @@ export const INITIAL_PATIENTS: Patient[] = [
     phone: '۰۹۳۵۱۲۳۴۵۶۷',
     age: 29,
     gender: 'زن',
-    medicalHistory: ['ندارد (سالم)'],
+    medicalHistory: [],
     totalCost: 28000000,
     paidAmount: 28000000,
     balance: 0, // تسویه کامل
@@ -364,7 +395,7 @@ export const INITIAL_PATIENTS: Patient[] = [
     phone: '۰۹۱۲۹۸۷۶۵۴۳',
     age: 32,
     gender: 'زن',
-    medicalHistory: ['ندارد'],
+    medicalHistory: [],
     totalCost: 8500000,
     paidAmount: 8500000,
     balance: 0,
@@ -377,61 +408,330 @@ export const INITIAL_PATIENTS: Patient[] = [
     labOrders: [],
     implantCases: [],
     payments: []
+  },
+  {
+    id: 'pat-5',
+    fileNumber: 'D-1052',
+    fullName: 'فاطمه رضایی',
+    nationalId: '۰۰۱۸۳۷۴۶۲۱',
+    phone: '۰۹۳۰۵۵۵۴۴۳۳',
+    age: 26,
+    gender: 'زن',
+    medicalHistory: ['حساسیت دارویی به پنی‌سیلین'],
+    totalCost: 19500000,
+    paidAmount: 9500000,
+    balance: -10000000,
+    activeTreatmentsCount: 2,
+    lastVisit: pastMonth,
+    notes: 'طرح درمان ارتودنسی نامرئی فک بالا + کامپوزیت لیرینگ زیبایی قدامی',
+    teethConditions: {
+      'UR_1': {
+        quadrant: 'UR',
+        toothNumber: 1,
+        surfaces: ['mesial', 'buccal'],
+        treatment: 'composite',
+        status: 'in_progress',
+        notes: 'ونیر کامپوزیت لیرینگ استتیک',
+        cost: 4500000,
+        doctorName: 'دکتر مهدی امیری',
+        date: pastTwoWeeks
+      },
+      'UL_1': {
+        quadrant: 'UL',
+        toothNumber: 1,
+        surfaces: ['mesial', 'buccal'],
+        treatment: 'composite',
+        status: 'in_progress',
+        notes: 'ونیر کامپوزیت لیرینگ استتیک همرنگ',
+        cost: 4500000,
+        doctorName: 'دکتر مهدی امیری',
+        date: pastTwoWeeks
+      }
+    },
+    sayadChecks: [
+      {
+        id: 'chk-501',
+        patientId: 'pat-5',
+        patientName: 'فاطمه رضایی',
+        sayadId: '۷۳۰۱۸۴۹۲۱۶۴۸۵۲۱۰',
+        bankName: 'بانک پاسارگاد',
+        amount: 5000000,
+        dueDate: inTwoWeeks,
+        drawerName: 'فاطمه رضایی',
+        status: 'in_collection',
+        isGuarantee: false,
+        description: 'قسط اول درمان زیبایی'
+      }
+    ],
+    installments: [
+      {
+        id: 'inst-501',
+        patientId: 'pat-5',
+        patientName: 'فاطمه رضایی',
+        treatmentName: 'کامپوزیت ونیر و الاینر',
+        amount: 2500000,
+        dueDate: inTwoWeeks,
+        status: 'pending',
+        installmentNumber: 1,
+        totalInstallments: 2,
+        paymentMethod: 'pos'
+      },
+      {
+        id: 'inst-502',
+        patientId: 'pat-5',
+        patientName: 'فاطمه رضایی',
+        treatmentName: 'کامپوزیت ونیر و الاینر',
+        amount: 2500000,
+        dueDate: nextMonth,
+        status: 'pending',
+        installmentNumber: 2,
+        totalInstallments: 2,
+        paymentMethod: 'pos'
+      }
+    ],
+    labOrders: [
+      {
+        id: 'lab-501',
+        patientId: 'pat-5',
+        patientName: 'فاطمه رضایی',
+        toothNumber: 'UR1-UL1 (ثنایا بالا)',
+        workType: 'الاینر شفاف ارتودنسی',
+        labName: 'لابراتوار دیجیتال پیشرو',
+        sendDate: pastTwoWeeks,
+        deliveryDate: inTwoWeeks,
+        appointmentDate: inTwoWeeks,
+        status: 'fabrication',
+        shade: 'BL2',
+        cost: 3200000,
+        reminderNotice: 'در حال ساخت در لابراتوار'
+      }
+    ],
+    implantCases: [],
+    payments: [
+      {
+        id: 'pay-501',
+        patientId: 'pat-5',
+        patientName: 'فاطمه رضایی',
+        amount: 9500000,
+        date: pastTwoWeeks,
+        method: 'pos',
+        referenceNumber: 'POS-8849201',
+        forTreatment: 'پیش‌پرداخت درمان کامپوزیت'
+      }
+    ]
   }
 ];
 
 export const INITIAL_APPOINTMENTS: Appointment[] = [
+  // دیروز (سوابق تکمیل‌شده)
+  {
+    id: 'apt-hist-1',
+    patientId: 'pat-4',
+    patientName: 'نگار تهرانی',
+    phone: '۰۹۱۲۹۸۷۶۵۴۳',
+    unit: 'یونیت زرد',
+    doctor: 'دکتر مریم رضایی',
+    date: yesterday,
+    time: '۱۷:۰۰',
+    durationMinutes: 45,
+    treatment: 'جرم‌گیری اولتراسونیک دو فک و بروساژ زیبایی',
+    status: 'completed',
+    reminderConfig: {
+      enabled: false,
+      preset: '1d_before',
+      channels: ['in_app']
+    }
+  },
+  {
+    id: 'apt-hist-2',
+    patientId: 'pat-2',
+    patientName: 'سارا علیزاده',
+    phone: '۰۹۳۵۱۲۳۴۵۶۷',
+    unit: 'یونیت آبی',
+    doctor: 'دکتر مهدی امیری',
+    date: yesterday,
+    time: '۱۸:۰۰',
+    durationMinutes: 60,
+    treatment: 'اسکن دیجیتال و قالب‌گیری لمینت ۶ واحد قدامی',
+    status: 'completed',
+    reminderConfig: {
+      enabled: false,
+      preset: '2h_before',
+      channels: ['phone_push', 'in_app']
+    }
+  },
+
+  // نوبت‌های امروز (پخش‌شده در هر ۳ یونیت بدون تداخل)
   {
     id: 'apt-1',
     patientId: 'pat-1',
     patientName: 'علی مرادی',
     phone: '۰۹۱۲۳۴۵۶۷۸۹',
-    unit: 'یونیت ۱',
+    unit: 'یونیت آبی',
     doctor: 'دکتر مهدی امیری',
     date: today,
     time: '۱۶:۳۰',
     durationMinutes: 45,
-    treatment: 'امتحان و سمان روکش زیرکونیا UR5',
-    status: 'waiting'
+    treatment: 'کنترل استئواینتگریشن UR6 و بررسی اولیه روکش UR5',
+    status: 'waiting',
+    reminderConfig: {
+      enabled: true,
+      preset: '2h_before',
+      channels: ['phone_push', 'sms', 'in_app'],
+      note: 'بیمار دیابتی کنترل‌شده · حساسیت به پنی‌سیلین'
+    }
   },
   {
     id: 'apt-2',
     patientId: 'pat-3',
     patientName: 'محمدرضا حسینی',
     phone: '۰۹۱۹۷۶۵۴۳۲۱',
-    unit: 'یونیت ۱',
+    unit: 'یونیت آبی',
     doctor: 'دکتر مهدی امیری',
     date: today,
     time: '۱۷:۳۰',
     durationMinutes: 60,
-    treatment: 'جلسه دوم روت‌کانال (آبچوریشن ۳ کانال دندان ۶ پایین)',
-    status: 'scheduled'
+    treatment: 'جلسه دوم روت‌کانال (آبچوریشن ۳ کانال دندان LL6)',
+    status: 'scheduled',
+    reminderConfig: {
+      enabled: true,
+      preset: '2h_before',
+      channels: ['phone_push', 'sms', 'in_app'],
+      note: 'کنترل فشار خون پیش از بی‌حسی'
+    }
   },
   {
     id: 'apt-3',
     patientId: 'pat-2',
     patientName: 'سارا علیزاده',
     phone: '۰۹۳۵۱۲۳۴۵۶۷',
-    unit: 'یونیت ۲',
+    unit: 'یونیت زرد',
     doctor: 'دکتر مریم رضایی',
     date: today,
     time: '۱۸:۳۰',
     durationMinutes: 45,
-    treatment: 'چکاپ و بررسی تماس لمینت‌ها',
-    status: 'scheduled'
+    treatment: 'چکاپ شید و بررسی تماس لمینت‌های E-Max',
+    status: 'scheduled',
+    reminderConfig: {
+      enabled: true,
+      preset: '30m_before',
+      channels: ['phone_push', 'in_app']
+    }
   },
   {
     id: 'apt-4',
     patientId: 'pat-4',
     patientName: 'نگار تهرانی',
     phone: '۰۹۱۲۹۸۷۶۵۴۳',
-    unit: 'اتاق جراحی',
+    unit: 'یونیت جراحی',
     doctor: 'دکتر مهدی امیری',
     date: today,
     time: '۱۹:۱۵',
     durationMinutes: 30,
-    treatment: 'معاینه و قالب‌گیری مطالعه',
-    status: 'scheduled'
+    treatment: 'معاینه تخصصی و قالب‌گیری مطالعه جراحی',
+    status: 'scheduled',
+    reminderConfig: {
+      enabled: true,
+      preset: '2h_before',
+      channels: ['phone_push', 'sms']
+    }
+  },
+  {
+    id: 'apt-5',
+    patientId: 'pat-5',
+    patientName: 'فاطمه رضایی',
+    phone: '۰۹۳۰۵۵۵۴۴۳۳',
+    unit: 'یونیت زرد',
+    doctor: 'دکتر مریم رضایی',
+    date: today,
+    time: '۱۹:۳۰',
+    durationMinutes: 60,
+    treatment: 'لیرینگ ونیر کامپوزیت استتیک ثنایا بالا (UR1, UL1)',
+    status: 'scheduled',
+    reminderConfig: {
+      enabled: true,
+      preset: '1d_before',
+      channels: ['phone_push', 'sms', 'in_app'],
+      note: 'حساسیت دارویی به پنی‌سیلین لحاظ شود'
+    }
+  },
+
+  // نوبت‌های فردا (همگام با تحویل روکش لابراتوار و پیگیری اندو)
+  {
+    id: 'apt-tmr-1',
+    patientId: 'pat-1',
+    patientName: 'علی مرادی',
+    phone: '۰۹۱۲۳۴۵۶۷۸۹',
+    unit: 'یونیت آبی',
+    doctor: 'دکتر مهدی امیری',
+    date: tomorrow,
+    time: '۱۶:۳۰',
+    durationMinutes: 45,
+    treatment: 'امتحان و سمان نهایی روکش زیرکونیا UR5 (آماده از لابراتوار پیشرو)',
+    status: 'scheduled',
+    reminderConfig: {
+      enabled: true,
+      preset: '1d_before',
+      channels: ['phone_push', 'sms', 'in_app'],
+      note: 'پروتز آماده مطب از لابراتوار پیشرو بررسی شود'
+    }
+  },
+  {
+    id: 'apt-tmr-2',
+    patientId: 'pat-3',
+    patientName: 'محمدرضا حسینی',
+    phone: '۰۹۱۹۷۶۵۴۳۲۱',
+    unit: 'یونیت آبی',
+    doctor: 'دکتر مهدی امیری',
+    date: tomorrow,
+    time: '۱۷:۳۰',
+    durationMinutes: 60,
+    treatment: 'پست و کور ریختگی و قالب‌گیری روکش LL6',
+    status: 'scheduled',
+    reminderConfig: {
+      enabled: true,
+      preset: '1d_before',
+      channels: ['phone_push', 'sms', 'in_app']
+    }
+  },
+  {
+    id: 'apt-tmr-3',
+    patientId: 'pat-5',
+    patientName: 'فاطمه رضایی',
+    phone: '۰۹۳۰۵۵۵۴۴۳۳',
+    unit: 'یونیت زرد',
+    doctor: 'دکتر مریم رضایی',
+    date: tomorrow,
+    time: '۱۸:۰۰',
+    durationMinutes: 45,
+    treatment: 'تحویل الاینر شفاف ارتودنسی و کنترل اتچمنت‌ها',
+    status: 'scheduled',
+    reminderConfig: {
+      enabled: true,
+      preset: '2h_before',
+      channels: ['phone_push', 'in_app']
+    }
+  },
+
+  // پس‌فردا (کیس یونیت جراحی)
+  {
+    id: 'apt-2d-1',
+    patientId: 'pat-1',
+    patientName: 'علی مرادی',
+    phone: '۰۹۱۲۳۴۵۶۷۸۹',
+    unit: 'یونیت جراحی',
+    doctor: 'دکتر مهدی امیری',
+    date: inTwoDays,
+    time: '۱۷:۰۰',
+    durationMinutes: 90,
+    treatment: 'جراحی فاز ۲ ایمپلنت UR6 و بستن هیلینگ اباتمنت',
+    status: 'scheduled',
+    reminderConfig: {
+      enabled: true,
+      preset: '2d_before',
+      channels: ['phone_push', 'sms', 'in_app'],
+      note: 'آماده‌سازی کیت استریل Dentium پیش از حضور بیمار'
+    }
   }
 ];
 

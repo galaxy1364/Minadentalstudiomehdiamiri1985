@@ -8,6 +8,8 @@ import { Patient } from '../types/dental';
 import { toPersianDigits, getCurrentPersianDate } from '../utils/jalali';
 import { getNextFileNumber, recordLastFileNumber } from '../utils/fileNumber';
 import { useHapticFeedback } from '../hooks/useHapticFeedback';
+import { ViewportModalPortal } from './ViewportModalPortal';
+import { useEscapeKey } from '../hooks/useDialogA11y';
 
 interface QuickAdmissionModalProps {
   isOpen: boolean;
@@ -23,11 +25,14 @@ export const QuickAdmissionModal: React.FC<QuickAdmissionModalProps> = ({
   onOpenPalmerChart
 }) => {
   const { impactLight, impactHeavy, success } = useHapticFeedback();
+  useEscapeKey(isOpen, onClose);
 
   // Form Fields
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
   const [nationalId, setNationalId] = useState('');
+  const [age, setAge] = useState<string>('32');
+  const [gender, setGender] = useState<'مرد' | 'زن'>('زن');
   const [fileNumber, setFileNumber] = useState('');
   const [chiefComplaint, setChiefComplaint] = useState('معاینه اولیه و چکاپ');
   const [selectedDoctor, setSelectedDoctor] = useState('دکتر مهدی امیری');
@@ -43,6 +48,8 @@ export const QuickAdmissionModal: React.FC<QuickAdmissionModalProps> = ({
       setFullName('');
       setPhone('');
       setNationalId('');
+      setAge('32');
+      setGender('زن');
       setChiefComplaint('معاینه اولیه و چکاپ');
       setMedicalNotes('');
       setAllergyAlert('');
@@ -58,6 +65,9 @@ export const QuickAdmissionModal: React.FC<QuickAdmissionModalProps> = ({
 
     const cleanFileNumber = fileNumber.trim() || getNextFileNumber();
     recordLastFileNumber(cleanFileNumber);
+    const priorityTag = priority === 'emergency' ? 'اورژانس فوری' : priority === 'vip' ? 'مراجع VIP' : '';
+    const parsedAge = Math.max(1, Math.min(115, Number(age) || 32));
+    const historyItems = [allergyAlert.trim(), priorityTag, medicalNotes.trim()].filter(Boolean);
 
     const newPatient: Patient = {
       id: `pat-${Date.now()}`,
@@ -65,27 +75,27 @@ export const QuickAdmissionModal: React.FC<QuickAdmissionModalProps> = ({
       fullName: fullName.trim(),
       phone: phone.trim() || '۰۹۱۲۰۰۰۰۰۰۰',
       nationalId: nationalId.trim() || '۰۰۰۰۰۰۰۰۰۰',
-      medicalHistory: allergyAlert ? [allergyAlert, medicalNotes].filter(Boolean) : [medicalNotes].filter(Boolean),
+      medicalHistory: historyItems,
       teethConditions: {},
       treatments: [
         {
           id: `trt-adm-${Date.now()}`,
           tooth: 'فک کامل',
           treatment: chiefComplaint || 'پذیرش سریع و تشکیل پرونده',
-          cost: 250000,
+          cost: 0,
           date: getCurrentPersianDate(),
           status: 'planned',
           doctorName: selectedDoctor
         }
       ],
-      age: 32,
-      gender: 'مرد',
+      age: parsedAge,
+      gender,
       totalCost: 0,
       paidAmount: 0,
       balance: 0,
       activeTreatmentsCount: 1,
       lastVisit: getCurrentPersianDate(),
-      notes: medicalNotes || 'پذیرش سریع کلینیک',
+      notes: [priorityTag ? `[${priorityTag}]` : '', medicalNotes.trim() || 'پذیرش سریع کلینیک'].filter(Boolean).join(' · '),
       sayadChecks: [],
       installments: [],
       payments: [],
@@ -108,47 +118,55 @@ export const QuickAdmissionModal: React.FC<QuickAdmissionModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-xs animate-in fade-in">
-      <div className="w-full max-w-lg bg-white rounded-t-[32px] sm:rounded-[28px] border border-slate-200 shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
-        
-        {/* Header */}
-        <div className="p-4 sm:p-5 bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 text-white flex items-center justify-between shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center text-white shadow-md">
-              <UserPlus className="w-5 h-5 stroke-[2.5]" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h3 className="text-base font-black">پذیرش سریع و تشکیل پرونده بیمار</h3>
-                <span className="text-[10px] bg-white/20 text-white px-2 py-0.5 rounded-full font-mono font-bold">
-                  داشبورد مستقیم
-                </span>
+    <ViewportModalPortal isOpen={isOpen}>
+      <div
+        dir="rtl"
+        role="dialog"
+        aria-modal="true"
+        aria-label="پذیرش سریع بیمار"
+        className="fixed inset-0 z-[100] flex flex-col sm:items-center sm:justify-center p-0 sm:p-4 bg-slate-950/60 backdrop-blur-sm animate-in fade-in"
+        onClick={onClose}
+      >
+        <div
+          onClick={(e) => e.stopPropagation()}
+          className="w-full sm:max-w-lg h-[100dvh] sm:h-auto sm:max-h-[92dvh] bg-white rounded-none sm:rounded-[28px] border-0 sm:border border-slate-200 shadow-2xl overflow-hidden flex flex-col text-right"
+        >
+          {/* Fixed Header */}
+          <div className="px-4 pt-3 pb-3.5 sm:p-4 bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 text-white shrink-0 sticky top-0 z-20 shadow-xs">
+            <div className="w-10 h-1 rounded-full bg-white/35 mx-auto mb-2.5 sm:hidden" />
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center text-white shadow-md">
+                  <UserPlus className="w-5 h-5 stroke-[2.5]" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black">پذیرش سریع بیمار</h3>
+                  <span className="text-[10px] text-emerald-100 font-bold block">تشکیل آنی پرونده بدون نیاز به اسکرول صفحه</span>
+                </div>
               </div>
-              <p className="text-xs text-emerald-100 mt-0.5">
-                ثبت آنی مشخصات و تخصیص شماره پرونده بدون نیاز به ورود به لیست کامل بیماران
-              </p>
+
+              <button
+                type="button"
+                onClick={() => {
+                  impactLight();
+                  onClose();
+                }}
+                aria-label="بستن پذیرش سریع"
+                className="min-w-[38px] min-h-[38px] rounded-[12px] bg-white/15 hover:bg-white/25 text-white flex items-center justify-center transition-all cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
             </div>
           </div>
 
-          <button
-            onClick={() => {
-              impactLight();
-              onClose();
-            }}
-            className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-all"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-
-        {/* Form Body */}
-        <div className="p-4 sm:p-5 overflow-y-auto space-y-3.5 text-xs">
+          {/* Scrollable Form Body */}
+          <div className="p-4 sm:p-5 flex-1 overflow-y-auto overscroll-contain space-y-3.5 text-xs">
           
           {/* File Number & Priority Banner */}
           <div className="flex items-center justify-between p-2.5 rounded-2xl bg-emerald-50/80 border border-emerald-200">
             <div className="flex items-center gap-2">
               <span className="text-slate-600 font-bold">شماره پرونده سیستمی:</span>
-              <input
+              <input aria-label="شماره پرونده سیستمی"
                 type="text"
                 value={fileNumber}
                 onChange={(e) => setFileNumber(e.target.value)}
@@ -218,26 +236,53 @@ export const QuickAdmissionModal: React.FC<QuickAdmissionModalProps> = ({
             </div>
           </div>
 
-          {/* National Code & Attending Doctor */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="text-slate-700 font-bold block mb-1">کد ملی (جهت استعلام بیمه و صیاد)</label>
+          {/* National Code, Age, Gender & Attending Doctor */}
+          <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5">
+            <div className="sm:col-span-4">
+              <label className="text-slate-700 font-bold block mb-1">کد ملی (بیمه و صیاد)</label>
               <input
                 type="text"
+                aria-label="کد ملی بیمار"
                 placeholder="۰۰۱۸۳۷۴۶۲۱"
                 value={nationalId}
                 onChange={(e) => setNationalId(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-emerald-500 font-mono text-left"
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2 text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-emerald-500 font-mono text-left"
                 dir="ltr"
               />
             </div>
 
-            <div>
-              <label className="text-slate-700 font-bold block mb-1">پزشک معالج انتخابی</label>
+            <div className="sm:col-span-2">
+              <label className="text-slate-700 font-bold block mb-1">سن</label>
+              <input
+                type="number"
+                aria-label="سن بیمار"
+                min={1}
+                max={115}
+                value={age}
+                onChange={(e) => setAge(e.target.value)}
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-2 py-2 text-slate-900 font-mono font-bold text-center focus:outline-none focus:ring-1 focus:ring-emerald-500"
+              />
+            </div>
+
+            <div className="sm:col-span-2">
+              <label className="text-slate-700 font-bold block mb-1">جنسیت</label>
               <select
+                aria-label="جنسیت بیمار"
+                value={gender}
+                onChange={(e) => setGender(e.target.value as 'مرد' | 'زن')}
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-2 py-2 text-slate-900 font-bold focus:outline-none focus:ring-1 focus:ring-emerald-500"
+              >
+                <option value="زن">زن</option>
+                <option value="مرد">مرد</option>
+              </select>
+            </div>
+
+            <div className="sm:col-span-4">
+              <label className="text-slate-700 font-bold block mb-1">پزشک معالج انتخابی</label>
+              <select aria-label="پزشک معالج انتخابی"
                 value={selectedDoctor}
                 onChange={(e) => setSelectedDoctor(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:ring-1 focus:ring-emerald-500 font-bold"
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2 text-slate-900 focus:outline-none focus:ring-1 focus:ring-emerald-500 font-bold"
               >
                 <option value="دکتر مهدی امیری">دکتر مهدی امیری (مدیر · جراح فک و ایمپلنت)</option>
                 <option value="دکتر سارا رضوانی">دکتر سارا رضوانی (ارتودنسی و زیبایی)</option>
@@ -296,38 +341,38 @@ export const QuickAdmissionModal: React.FC<QuickAdmissionModalProps> = ({
 
         </div>
 
-        {/* Footer Actions */}
-        <div className="p-4 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-end gap-2 shrink-0">
-          <button
-            type="button"
-            onClick={onClose}
-            className="w-full sm:w-auto py-2 px-4 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold text-xs transition-all"
-          >
-            انصراف
-          </button>
+          {/* Fixed Footer Actions */}
+          <div className="p-3.5 pb-[max(0.875rem,env(safe-area-inset-bottom))] bg-white/95 backdrop-blur-md border-t border-slate-200 flex flex-col sm:flex-row items-center justify-end gap-2 shrink-0 sticky bottom-0 z-20">
+            <button
+              type="button"
+              onClick={onClose}
+              className="w-full sm:w-auto py-2.5 px-4 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition-all cursor-pointer"
+            >
+              انصراف
+            </button>
 
-          <button
-            type="button"
-            onClick={() => handleSubmit(true)}
-            disabled={!fullName.trim()}
-            className="w-full sm:w-auto py-2 px-4 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-extrabold text-xs shadow-md active:scale-95 transition-all flex items-center justify-center gap-1.5 disabled:opacity-40"
-          >
-            <Stethoscope className="w-4 h-4" />
-            <span>ثبت و باز کردن چارت پالمر</span>
-          </button>
+            <button
+              type="button"
+              onClick={() => handleSubmit(true)}
+              disabled={!fullName.trim()}
+              className="w-full sm:w-auto py-2.5 px-4 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-extrabold text-xs shadow-md active:scale-95 transition-all flex items-center justify-center gap-1.5 disabled:opacity-40 cursor-pointer"
+            >
+              <Stethoscope className="w-4 h-4" />
+              <span>ثبت و باز کردن چارت پالمر</span>
+            </button>
 
-          <button
-            type="button"
-            onClick={() => handleSubmit(false)}
-            disabled={!fullName.trim()}
-            className="w-full sm:w-auto py-2.5 px-5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs shadow-md shadow-emerald-600/25 active:scale-95 transition-all flex items-center justify-center gap-1.5 disabled:opacity-40"
-          >
-            <Check className="w-4 h-4 stroke-[3]" />
-            <span>ثبت آنی و تشکیل پرونده</span>
-          </button>
+            <button
+              type="button"
+              onClick={() => handleSubmit(false)}
+              disabled={!fullName.trim()}
+              className="w-full sm:w-auto py-2.5 px-5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs shadow-md shadow-emerald-600/25 active:scale-95 transition-all flex items-center justify-center gap-1.5 disabled:opacity-40 cursor-pointer"
+            >
+              <Check className="w-4 h-4 stroke-[3]" />
+              <span>ثبت آنی و تشکیل پرونده</span>
+            </button>
+          </div>
         </div>
-
       </div>
-    </div>
+    </ViewportModalPortal>
   );
 };

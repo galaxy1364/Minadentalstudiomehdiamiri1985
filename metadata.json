@@ -1,6 +1,6 @@
 {
   "name": "مینادنتال - سیستم مدیریت یکپارچه دندانپزشکی",
   "description": "سامانه فوق استاندارد مدیریت کلینیک دندانپزشکی مینادنتال، چارت پالمر، لابراتوار، ایمپلنت، چک صیادی، اقساط و همگام‌سازی ابری",
-  "requestFramePermissions": [],
+  "requestFramePermissions": ["camera", "microphone"],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

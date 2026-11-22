@@ -1,0 +1,75 @@
+{
+  "project": "MinaDental (مینادنتال)",
+  "version": "27.7.0-SKILLS-LOCKED",
+  "owner": "دکتر مهدی امیری (مدیر کلینیک و جراح)",
+  "architecture": {
+    "scaleTarget": "500,000+ پرونده فعال همزمان",
+    "platforms": ["iOS 27 IPA / WebClip", "Android APK / WebAPK", "Desktop PWA"],
+    "database": "Supabase PostgreSQL + Materialized Views + IndexedDB Offline Engine",
+    "canonicalClinicUnits": ["یونیت آبی", "یونیت زرد", "یونیت جراحی"],
+    "financialSeparationRule": "سهم پزشک ۱۰۰٪ مستقل و صرفاً از روی کارکرد درمانی ثبت‌شده (منهای لابراتوار) محاسبه می‌شود؛ کلیه پرداخت‌های بیماران (نقد، پوز، چک صیادی، اقساط) و مانده بدهی بیماران ۱۰۰٪ متعلق به مطب و مدیر (دکتر مهدی امیری) است."
+  },
+  "installedQaPlugins": [
+    "vitest",
+    "@testing-library/react",
+    "happy-dom",
+    "@vitest/coverage-v8"
+  ],
+  "installedMemorySkills": [
+    "/memory/skills/SKILLS_MASTER_INDEX.md",
+    "/memory/skills/memory-continuity-skill/SKILL.md",
+    "/memory/skills/qa-module-auditor-skill/SKILL.md",
+    "/memory/skills/smart-scheduling-clinical-skill/SKILL.md",
+    "/memory/skills/qbank-ui-design-skill/SKILL.md",
+    "/memory/skills/clinical-dental-workflow-skill/SKILL.md",
+    "/memory/skills/fintech-ledger-precision-skill/SKILL.md",
+    "/memory/skills/offline-pwa-sync-skill/SKILL.md",
+    "/memory/skills/typescript-react-architecture-skill/SKILL.md"
+  ],
+  "smartAppointmentCapabilitiesLocked": [
+    "namedCanonicalUnitsAndColorMap",
+    "hourlyMultiUnitTimelineGridWithLiveTimeAndDragDrop",
+    "directCallNativeSmsAndAutoSmsAutomationDock",
+    "oneTapBatchTomorrowAndDayReminders",
+    "oneTapConflictToWaitlistConversion",
+    "postCompletionRecallAndPaymentHook",
+    "fullIntervalUnitAndDoctorCollisionCheck",
+    "iranianHolidaysAndDoctorOffDaysWithNextWorkingJump",
+    "liveUnitCapacityUtilizationAndOneTapNextFreeSlot",
+    "waitingRoomSlaAlertOver20Minutes",
+    "multiSessionRecurringBooking",
+    "waitlistAutoBackfillAndCascadeShift",
+    "utf8BomExcelCsvExportAndPrintSheet",
+    "phonePushSnoozeAndWhatsAppReminders"
+  ],
+  "uiUxLockedStandards": {
+    "noDarkBackgrounds": true,
+    "noTechnicalTelemetryInUi": true,
+    "noVisibleTrackingBadgesInUi": true,
+    "twoStepConfirmationRequired": true,
+    "fullPageMobileSheets": true,
+    "persianDigitsAndLabelsOnly": true,
+    "minTouchTargetPx": 44,
+    "fontFamily": "Vazirmatn"
+  },
+  "moduleTrackingIds": {
+    "dashboard": "MD-DSH-1405-1000",
+    "patients": "MD-PAT-1405-1001",
+    "appointments": "MD-APT-1405-1001",
+    "palmer_chart": "MD-PLM-1405-1001",
+    "lab": "MD-LAB-1405-1001",
+    "implant": "MD-IMP-1405-1001",
+    "financial_debtors": "MD-FIN-1405-1001",
+    "doctor_commissions": "MD-COM-1405-1001",
+    "sayad_checks": "MD-CHK-1405-1001",
+    "installments": "MD-INS-1405-1001",
+    "inventory": "MD-INV-1405-1001",
+    "sterilization": "MD-STR-1405-1001",
+    "xrays": "MD-XRY-1405-1001",
+    "reminders": "MD-REM-1405-1001",
+    "marketing": "MD-MKT-1405-1001",
+    "insurance": "MD-CLM-1405-1001",
+    "ai_assistant": "MD-AIA-1405-1001",
+    "settings": "MD-SET-1405-1001"
+  }
+}

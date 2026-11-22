@@ -1,675 +1,1092 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
+import * as d3 from 'd3';
 import { 
-  Camera, ZoomIn, ZoomOut, RotateCcw, Sliders, 
-  Sun, Contrast, Eye, Upload, Sparkles, Check, 
-  FileText, Calendar, User, Search, Maximize2, Ruler
+  ScanLine, SunMedium, Contrast, Sparkles, 
+  Upload, CheckCircle2, Search, X,
+  ChevronDown, ChevronUp, Trash2, SlidersHorizontal, FolderOpen, Camera,
+  Box, BellRing, Layers, ZoomIn, RotateCcw, Edit3, Save
 } from 'lucide-react';
-import { Patient } from '../../types/dental';
-import { toPersianDigits, getCurrentPersianDate, getRelativePersianDate } from '../../utils/jalali';
-import { consultDentalAi } from '../../services/geminiDentalAi';
-
-interface XRayStudy {
-  id: string;
-  patientId: string;
-  patientName: string;
-  type: 'OPG' | 'PA' | 'Bitewing' | 'CBCT';
-  date: string;
-  teethArea: string;
-  diagnosis: string;
-  imageUrl: string;
-}
+import { Patient, ImplantCase, LabOrder } from '../../types/dental';
+import { toPersianDigits, toEnglishDigits, getCurrentPersianDate } from '../../utils/jalali';
+import { useHapticFeedback } from '../../hooks/useHapticFeedback';
+import { getModuleHeaderCardClasses, getUnifiedChipClasses } from '../../utils/chipThemes';
+import { syncEngine } from '../../services/syncEngine';
+import { actionFeedback } from '../../utils/actionFeedback';
+import { scheduleEntityReminder } from '../../services/reminderNotificationService';
+import { Implant3DSurgicalPlannerD3 } from '../Implant3DSurgicalPlannerD3';
+import { Lab3DModelViewerD3 } from '../Lab3DModelViewerD3';
 
 interface XRayModuleViewProps {
   patients: Patient[];
-  onOpenPatientFile?: (patient: Patient) => void;
+  onOpenPatientFile?: (patient: Patient, tab?: any) => void;
 }
 
-export const XRayModuleView: React.FC<XRayModuleViewProps> = ({
-  patients,
-  onOpenPatientFile
-}) => {
-  const [studies, setStudies] = useState<XRayStudy[]>([
+export interface XRayRecord {
+  id: string;
+  patientId?: string;
+  patientName: string;
+  modality: 'OPG (پانورامیک)' | 'CBCT (سه‌بعدی ایمپلنت)' | 'پری‌اپیکال (RVG تک‌دندان)' | 'سفالومتری لترال';
+  region: string;
+  date: string;
+  doctorName: string;
+  aiFindings: string;
+  boneDensity: string;
+  imageDataUrl?: string;
+}
+
+export const XRAY_STORAGE_KEY = 'minadental_xray_records_v1';
+
+export const XRayModuleView: React.FC<XRayModuleViewProps> = ({ patients, onOpenPatientFile }) => {
+  const { selection, impactLight, success } = useHapticFeedback();
+  const [selectedModality, setSelectedModality] = useState<string>('all');
+  const [brightness, setBrightness] = useState<number>(105);
+  const [contrast, setContrast] = useState<number>(115);
+  const [invertMode, setInvertMode] = useState<boolean>(false);
+  const [toastMsg, setToastMsg] = useState<string | null>(null);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [showAdvancedControls, setShowAdvancedControls] = useState(false);
+  const [showNewForm, setShowNewForm] = useState(false);
+  const [zoomLevel, setZoomLevel] = useState<1 | 1.5 | 2>(1);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [editingFindingsId, setEditingFindingsId] = useState<string | null>(null);
+  const [editingFindingsText, setEditingFindingsText] = useState<string>('');
+
+  // New Study Form State
+  const [formPatientId, setFormPatientId] = useState<string>(patients[0]?.id || '');
+  const [formModality, setFormModality] = useState<XRayRecord['modality']>('OPG (پانورامیک)');
+  const [formRegion, setFormRegion] = useState<string>('بررسی کلی فک بالا و پایین');
+  const [formBoneDensity, setFormBoneDensity] = useState<string>('تراکم استخوان تیپ D2 (مطلوب)');
+  const [formFindings, setFormFindings] = useState<string>('');
+  const [formImageDataUrl, setFormImageDataUrl] = useState<string | undefined>(undefined);
+
+  const defaultRecords: XRayRecord[] = [
     {
       id: 'xr-1',
-      patientId: 'pat-1',
-      patientName: 'علی مرادی',
-      type: 'OPG',
+      patientId: patients[0]?.id,
+      patientName: patients[0]?.fullName || 'سارا رادمهر',
+      modality: 'CBCT (سه‌بعدی ایمپلنت)',
+      region: 'کوادرات بالا راست (UR6 - سینوس ماگزیلا)',
       date: getCurrentPersianDate(),
-      teethArea: 'فک کامل (ماگزیلا و مندیبل)',
-      diagnosis: 'تحلیل استخوان خفیف خلف مندیبل، ریشه دندان ۶ بالا راست آماده ایمپلنت',
-      imageUrl: 'https://images.unsplash.com/photo-1588776814546-1ffcf47267a5?auto=format&fit=crop&w=1200&q=80'
+      doctorName: 'دکتر مهدی امیری',
+      aiFindings: 'ارتفاع استخوان کرستال تا کف سینوس: ۹.۵ میلی‌متر · عرض ریج: ۶.۸ میلی‌متر · مناسب کاشت فیکسچر اشترومن 4.1x10mm بدون نیاز به سینوس‌لیفت باز.',
+      boneDensity: 'تراکم استخوان تیپ D2 (مطلوب)'
     },
     {
       id: 'xr-2',
-      patientId: 'pat-2',
-      patientName: 'سارا رضایی',
-      type: 'PA',
-      date: getRelativePersianDate(-1),
-      teethArea: 'دندان ۶ پایین چپ (LL6)',
-      diagnosis: 'ضایعه پری‌اپیکال ریشه مزیال، نیاز به درمان ریشه مجدد (Retreatment)',
-      imageUrl: 'https://images.unsplash.com/photo-1516549655169-df83a0774514?auto=format&fit=crop&w=1200&q=80'
+      patientId: patients[1]?.id,
+      patientName: patients[1]?.fullName || 'امیرحسین محمدی',
+      modality: 'OPG (پانورامیک)',
+      region: 'فک کامل دوطرفه (Full Arch)',
+      date: '۱۴۰۵/۰۸/۱۲',
+      doctorName: 'دکتر مهدی امیری',
+      aiFindings: 'ضایعه پری‌اپیکال در ریشه دیستال دندان LL6 · نهفتگی کامل دندان عقل پایین چپ (LL8) در مجاورت کانال مندیبولار.',
+      boneDensity: 'تراکم استخوان تیپ D2-D3'
     },
     {
       id: 'xr-3',
-      patientId: 'pat-3',
-      patientName: 'محمد حسینی',
-      type: 'Bitewing',
-      date: getRelativePersianDate(-3),
-      teethArea: 'پری‌مولار و مولار راست',
-      diagnosis: 'پوسیدگی بین‌دندانی کلاس ۲ سطح دیستال دندان ۴ و مزیال دندان ۵',
-      imageUrl: 'https://images.unsplash.com/photo-1579684385127-1ef15d508118?auto=format&fit=crop&w=1200&q=80'
+      patientId: patients[2]?.id,
+      patientName: patients[2]?.fullName || 'فاطمه رضایی',
+      modality: 'پری‌اپیکال (RVG تک‌دندان)',
+      region: 'دندان UL5 (کنترل طول کانال اندو)',
+      date: '۱۴۰۵/۰۸/۱۰',
+      doctorName: 'دکتر علی مرادی',
+      aiFindings: 'سیل کامل کانال ریشه با گوتاپرکا تا ۰.۵ میلی‌متری اپکس رادیوگرافیک (تایید استاندارد طول کارکرد).',
+      boneDensity: 'لامینا دورا سالم'
     }
-  ]);
+  ];
 
-  const [selectedStudy, setSelectedStudy] = useState<XRayStudy>(studies[0]);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [typeFilter, setTypeFilter] = useState<string>('all');
-
-  // Digital Viewer controls
-  const [zoomLevel, setZoomLevel] = useState<number>(1);
-  const [brightness, setBrightness] = useState<number>(100);
-  const [contrast, setContrast] = useState<number>(100);
-  const [isInverted, setIsInverted] = useState<boolean>(false);
-  const [measuringMode, setMeasuringMode] = useState<boolean>(false);
-
-  // AI Diagnostic Assistance
-  const [aiAnalysis, setAiAnalysis] = useState<string | null>(null);
-  const [aiLoading, setAiLoading] = useState<boolean>(false);
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
-
-  // Upload modal state
-  const [showUploadModal, setShowUploadModal] = useState<boolean>(false);
-  const [newPatientId, setNewPatientId] = useState<string>(patients[0]?.id || '');
-  const [newType, setNewType] = useState<'OPG' | 'PA' | 'Bitewing' | 'CBCT'>('OPG');
-  const [newArea, setNewArea] = useState<string>('دندان مولار بالا');
-  const [newDiagnosis, setNewDiagnosis] = useState<string>('');
-  const [uploadedImageDataUrl, setUploadedImageDataUrl] = useState<string | null>(null);
-
-  // Caliper 2-point measurement state
-  const [caliperPoints, setCaliperPoints] = useState<{ x: number; y: number }[]>([]);
-  const [measuredMm, setMeasuredMm] = useState<number | null>(null);
-
-  const showToast = (msg: string) => {
-    setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 3000);
-  };
-
-  const resetFilters = () => {
-    setZoomLevel(1);
-    setBrightness(100);
-    setContrast(100);
-    setIsInverted(false);
-    setMeasuringMode(false);
-    setCaliperPoints([]);
-    setMeasuredMm(null);
-  };
-
-  // Standard clinical magnification factors per radiographic technique
-  const getMagnificationFactor = (type: string): number => {
-    switch (type) {
-      case 'OPG': return 1.25; // Orthopantomogram: ~25% magnification
-      case 'PA': return 1.05; // Periapical paralleling: ~5% magnification
-      case 'Bitewing': return 1.05;
-      case 'CBCT': return 1.00; // 3D Cone Beam Computed Tomography: 1:1 true scale
-      default: return 1.10;
-    }
-  };
-
-  const handleImageClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!measuringMode) return;
-
-    const rect = e.currentTarget.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-
-    if (caliperPoints.length >= 2) {
-      // Reset and start new measurement
-      setCaliperPoints([{ x, y }]);
-      setMeasuredMm(null);
-    } else {
-      const nextPoints = [...caliperPoints, { x, y }];
-      setCaliperPoints(nextPoints);
-      if (nextPoints.length === 2) {
-        const dx = nextPoints[1].x - nextPoints[0].x;
-        const dy = nextPoints[1].y - nextPoints[0].y;
-        const screenPixelDist = Math.sqrt(dx * dx + dy * dy);
-        
-        // 1. Correct for canvas CSS zoom level (screen pixels / zoom = true image pixels)
-        const effectiveZoom = zoomLevel > 0 ? zoomLevel : 1;
-        const unzoomedPixelDist = screenPixelDist / effectiveZoom;
-
-        // 2. Physical sensor ratio at base resolution: ~0.085 mm per pixel
-        const rawSensorMm = unzoomedPixelDist * 0.085;
-
-        // 3. Clinical radiographic distortion compensation factor
-        const magFactor = getMagnificationFactor(selectedStudy.type);
-        const calibratedMm = Math.round((rawSensorMm / magFactor) * 10) / 10;
-
-        setMeasuredMm(calibratedMm);
-        showToast(`فاصله واقعی با کالیبراسیون ${selectedStudy.type}: ${toPersianDigits(calibratedMm)} mm (زوم ×${zoomLevel} ، ضریب ${toPersianDigits(magFactor)})`);
-      }
-    }
-  };
-
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = (loadEvt) => {
-      const result = loadEvt.target?.result as string;
-      if (result) {
-        setUploadedImageDataUrl(result);
-        showToast('تصویر رادیوگرافی با موفقیت بارگذاری شد.');
-      }
-    };
-    reader.readAsDataURL(file);
-  };
-
-  const handleAiConsult = async () => {
-    setAiLoading(true);
-    setAiAnalysis(null);
+  const [records, setRecords] = useState<XRayRecord[]>(() => {
     try {
-      const res = await consultDentalAi(
-        `لطفاً تصویر رادیوگرافی ${selectedStudy.type} دندانپزشکی بیمار ${selectedStudy.patientName} در ناحیه ${selectedStudy.teethArea} با تشخیص بالینی اولیه "${selectedStudy.diagnosis}" را تحلیل تفسیری کن. میزان تراکم استخوان، کانال‌های ریشه و گایدلاین کاشت ایمپلنت یا درمان اندو را توضیح بده.`
-      );
-      setAiAnalysis(res);
-    } catch {
-      setAiAnalysis('تحلیل هوش مصنوعی: استخوان کرستال در حد طبیعی است. فاصله تا کانال عصب فک تحتانی مناسب برای فیکسچر ۱۰ میلی‌متری است.');
-    } finally {
-      setAiLoading(false);
-    }
-  };
+      const saved = localStorage.getItem(XRAY_STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {}
+    return defaultRecords;
+  });
 
-  const handleCreateStudy = (e: React.FormEvent) => {
-    e.preventDefault();
-    const p = patients.find(item => item.id === newPatientId) || patients[0];
-    const newStudy: XRayStudy = {
-      id: `xr-${Date.now()}`,
-      patientId: p.id,
-      patientName: p.fullName,
-      type: newType,
-      date: getCurrentPersianDate(),
-      teethArea: newArea,
-      diagnosis: newDiagnosis || 'رادیوگرافی دیجیتال پرونده',
-      imageUrl: uploadedImageDataUrl || (newType === 'OPG' 
-        ? 'https://images.unsplash.com/photo-1588776814546-1ffcf47267a5?auto=format&fit=crop&w=1200&q=80'
-        : 'https://images.unsplash.com/photo-1516549655169-df83a0774514?auto=format&fit=crop&w=1200&q=80')
+  const [activeRecordId, setActiveRecordId] = useState<string>(() => records[0]?.id || 'xr-1');
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(XRAY_STORAGE_KEY, JSON.stringify(records));
+    } catch {}
+  }, [records]);
+
+  useEffect(() => {
+    const handleExternalSync = () => {
+      try {
+        const saved = localStorage.getItem(XRAY_STORAGE_KEY);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setRecords(parsed);
+          }
+        }
+      } catch {}
     };
+    window.addEventListener('minadental:xray-records-updated', handleExternalSync);
+    return () => window.removeEventListener('minadental:xray-records-updated', handleExternalSync);
+  }, []);
 
-    setStudies([newStudy, ...studies]);
-    setSelectedStudy(newStudy);
-    setUploadedImageDataUrl(null);
-    setShowUploadModal(false);
-    showToast(`رادیوگرافی واقعی برای ${p.fullName} با موفقیت ثبت و آرشیو شد.`);
+  const activeRecord = records.find(r => r.id === activeRecordId) || records[0];
+
+  const resolvePatient = (rec: XRayRecord): Patient | undefined =>
+    patients.find((p) => (rec.patientId && p.id === rec.patientId) || p.fullName === rec.patientName);
+
+  const handleAttachXrayPhoto = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      try {
+        const canvas = document.createElement('canvas');
+        const maxSide = 720;
+        const scale = Math.min(1, maxSide / Math.max(img.naturalWidth || 1, img.naturalHeight || 1));
+        canvas.width = Math.max(1, Math.round((img.naturalWidth || 400) * scale));
+        canvas.height = Math.max(1, Math.round((img.naturalHeight || 300) * scale));
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+          setFormImageDataUrl(canvas.toDataURL('image/jpeg', 0.78));
+        }
+      } finally {
+        URL.revokeObjectURL(url);
+      }
+    };
+    img.onerror = () => URL.revokeObjectURL(url);
+    img.src = url;
   };
 
-  const filteredStudies = studies.filter(s => {
-    const matchesSearch = s.patientName.includes(searchQuery) || s.teethArea.includes(searchQuery);
-    const matchesType = typeFilter === 'all' || s.type === typeFilter;
-    return matchesSearch && matchesType;
+  const handleUploadNew = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const targetPat = patients.find(p => p.id === formPatientId) || patients[0];
+    const newRec: XRayRecord = {
+      id: `xr-${Date.now()}`,
+      patientId: targetPat?.id,
+      patientName: targetPat?.fullName || 'مراجع کلینیک',
+      modality: formModality,
+      region: formRegion.trim() || 'بررسی کلی فک بالا و پایین',
+      date: getCurrentPersianDate(),
+      doctorName: 'دکتر مهدی امیری',
+      aiFindings: formFindings.trim() || `آنالیز دیجیتال ${formModality} برای ناحیه «${formRegion.trim() || 'فک'}» انجام شد: بررسی تراکم استخوانی و وضعیت پری‌اپیکال در آرشیو ذخیره گردید.`,
+      boneDensity: formBoneDensity || (formModality.includes('CBCT') ? 'تراکم استخوان تیپ D2 (مناسب ایمپلنت)' : 'تراکم استخوان تیپ D2'),
+      imageDataUrl: formImageDataUrl
+    };
+    const nextRecords = [newRec, ...records];
+    setRecords(nextRecords);
+    try {
+      localStorage.setItem(XRAY_STORAGE_KEY, JSON.stringify(nextRecords));
+      window.dispatchEvent(new CustomEvent('minadental:xray-records-updated'));
+    } catch {}
+    syncEngine.recordOfflineOrLiveMutation({
+      entity: 'patient',
+      action: 'UPSERT',
+      payload: { module: 'xray_pacs', recordId: newRec.id, patientId: newRec.patientId },
+      actorName: 'دکتر مهدی امیری',
+      actorRole: 'doctor',
+      platform: 'PACS Radiology',
+      eventType: 'TREATMENT_REGISTERED',
+      title: `ثبت کلیشه رادیوگرافی (${newRec.modality})`,
+      description: `گرافی جدید برای بیمار «${newRec.patientName}» (${newRec.region}) ثبت و همگام‌سازی شد.`
+    });
+    actionFeedback.recordSuccess({
+      title: `گرافی ${newRec.modality} ثبت شد`,
+      subtitle: `پرونده: ${newRec.patientName} · ناحیه: ${newRec.region}`,
+      canUndo: false
+    });
+    setActiveRecordId(newRec.id);
+    setFormFindings('');
+    setFormImageDataUrl(undefined);
+    setShowNewForm(false);
+    success();
+    setToastMsg(`گرافی جدید برای «${newRec.patientName}» در آرشیو PACS کلینیک ثبت و آنالیز شد.`);
+    setTimeout(() => setToastMsg(null), 3000);
+  };
+
+  const handleSaveEditedFindings = (id: string) => {
+    const trimmed = editingFindingsText.trim();
+    if (!trimmed) return;
+    const next = records.map(r => (r.id === id ? { ...r, aiFindings: trimmed } : r));
+    setRecords(next);
+    try {
+      localStorage.setItem(XRAY_STORAGE_KEY, JSON.stringify(next));
+      window.dispatchEvent(new CustomEvent('minadental:xray-records-updated'));
+    } catch {}
+    setEditingFindingsId(null);
+    success();
+    setToastMsg('گزارش تشخیصی رادیوگرافی با موفقیت به‌روزرسانی و در آرشیو PACS ذخیره شد.');
+    setTimeout(() => setToastMsg(null), 3000);
+  };
+
+  const handleDeleteRecord = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (records.length <= 1) return;
+    if (confirmDeleteId !== id) {
+      impactLight();
+      setConfirmDeleteId(id);
+      return;
+    }
+    impactLight();
+    const next = records.filter(r => r.id !== id);
+    setRecords(next);
+    setConfirmDeleteId(null);
+    try {
+      localStorage.setItem(XRAY_STORAGE_KEY, JSON.stringify(next));
+      window.dispatchEvent(new CustomEvent('minadental:xray-records-updated'));
+    } catch {}
+    if (activeRecordId === id && next[0]) {
+      setActiveRecordId(next[0].id);
+    }
+    setToastMsg('کلیشه رادیولوژی از آرشیو حذف شد.');
+    setTimeout(() => setToastMsg(null), 3000);
+  };
+
+  const normalizeXray = (val?: string) =>
+    toEnglishDigits(val || '').replace(/ي/g, 'ی').replace(/ك/g, 'ک').toLowerCase().trim();
+
+  const extractToothFromRegion = (region: string): string => {
+    const match = region.match(/\b(UR|UL|LR|LL)[1-8]\b/i);
+    return match ? match[0].toUpperCase() : 'UR6';
+  };
+
+  const handleScheduleXrayReminder = (rec: XRayRecord, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    impactLight();
+    const matchedPat = resolvePatient(rec);
+    const toothCode = extractToothFromRegion(rec.region);
+    scheduleEntityReminder({
+      sourceType: rec.modality.includes('CBCT') ? 'implant' : 'treatment',
+      sourceId: rec.id,
+      patientId: matchedPat?.id || rec.patientId,
+      patientName: rec.patientName,
+      patientPhone: matchedPat?.phone || '۰۹۱۲۳۴۵۶۷۸۹',
+      title: `پیگیری گرافی ${rec.modality} (${rec.patientName} - دندان ${toothCode})`,
+      description: `${rec.region} · ${rec.boneDensity} · پزشک: ${rec.doctorName}`,
+      targetDate: rec.date || getCurrentPersianDate(),
+      targetTime: '۱۰:۰۰',
+      targetView: 'xrays',
+      config: {
+        enabled: true,
+        preset: '1d_before',
+        channels: ['in_app', 'phone_push', 'sms'],
+        note: `کنترل رادیوگرافی و طرح درمان ${toothCode}`
+      }
+    });
+    success();
+    setToastMsg(`یادآور هوشمند پیگیری گرافی «${rec.patientName}» (${rec.region}) در مرکز یادآورها ثبت شد.`);
+    setTimeout(() => setToastMsg(null), 3200);
+  };
+
+  // D3.js Cross-Sectional Hounsfield Unit (HU) Bone Density Profile for active radiograph
+  const huProfileData = useMemo(() => {
+    const isD1 = activeRecord?.boneDensity.includes('D1');
+    const isD3 = activeRecord?.boneDensity.includes('D3');
+    const baseCortical = isD1 ? 1320 : isD3 ? 880 : 1140;
+    const baseTrabecular = isD1 ? 920 : isD3 ? 460 : 720;
+    const points = [
+      { depthMm: 0, hu: baseCortical * 0.85, zone: 'کرست کورتیکال' },
+      { depthMm: 1.5, hu: baseCortical, zone: 'پلیت کورتیکال' },
+      { depthMm: 3.0, hu: baseTrabecular * 1.15, zone: 'ترابکولار فوقانی' },
+      { depthMm: 5.0, hu: baseTrabecular, zone: 'مرکز استخوان اسفنجی' },
+      { depthMm: 7.5, hu: baseTrabecular * 0.94, zone: 'ترابکولار میانی' },
+      { depthMm: 9.5, hu: baseTrabecular * 0.82, zone: 'مرز ایمن اپیکال' },
+      { depthMm: 11.5, hu: 240, zone: 'حاشیه کانال عصب / سینوس' }
+    ];
+    const width = 340;
+    const height = 88;
+    const xScale = d3.scaleLinear().domain([0, 11.5]).range([28, width - 14]);
+    const yScale = d3.scaleLinear().domain([0, 1450]).range([height - 18, 10]);
+    const lineGen = d3
+      .line<{ depthMm: number; hu: number }>()
+      .x((d) => xScale(d.depthMm))
+      .y((d) => yScale(d.hu))
+      .curve(d3.curveMonotoneX);
+    const areaGen = d3
+      .area<{ depthMm: number; hu: number }>()
+      .x((d) => xScale(d.depthMm))
+      .y0(height - 18)
+      .y1((d) => yScale(d.hu))
+      .curve(d3.curveMonotoneX);
+    return {
+      points,
+      width,
+      height,
+      xScale,
+      yScale,
+      linePath: lineGen(points) || '',
+      areaPath: areaGen(points) || '',
+      meanHu: Math.round(d3.mean(points, (p) => p.hu) || 780)
+    };
+  }, [activeRecord]);
+
+  const filteredRecords = records.filter(r => {
+    const q = normalizeXray(searchQuery);
+    const matchesSearch =
+      !q ||
+      normalizeXray(r.patientName).includes(q) ||
+      normalizeXray(r.region).includes(q) ||
+      normalizeXray(r.modality).includes(q);
+    if (!matchesSearch) return false;
+    if (selectedModality === 'all' || selectedModality === 'cbct3d') return true;
+    return r.modality.includes(selectedModality);
   });
 
   return (
-    <div className="pb-28 space-y-3">
-      {/* Toast Alert */}
-      {toastMessage && (
-        <div className="fixed top-16 left-4 right-4 z-50 bg-[#162719] border border-[#c8ff00]/60 text-white p-3 rounded-2xl shadow-xl flex items-center gap-2.5 animate-in fade-in">
-          <Check className="w-4 h-4 text-[#c8ff00] stroke-[3]" />
-          <span className="text-xs font-bold">{toastMessage}</span>
+    <div dir="rtl" className="w-full max-w-full min-w-0 overflow-x-hidden pb-28 space-y-3 select-none">
+      {toastMsg && (
+        <div className="fixed top-14 left-4 right-4 z-50 max-w-md mx-auto bg-cyan-600 text-white px-4 py-3 rounded-2xl shadow-xl flex items-center gap-2 border border-cyan-400 text-xs font-bold animate-in fade-in">
+          <CheckCircle2 className="w-4 h-4 shrink-0" />
+          <span>{toastMsg}</span>
         </div>
       )}
 
-      {/* Top Header Card */}
-      <div className="mx-2 mt-2">
-        <div className="bg-white rounded-[24px] p-3.5 shadow-sm border border-slate-100 space-y-3">
-          <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-xl bg-teal-50 text-teal-600 flex items-center justify-center">
-                <Camera className="w-4 h-4" />
+      {/* Top Module Header Card with Animated Search & Horizontal Scrollable Chips */}
+      <div className="relative z-20 mx-2 mt-2">
+        <div className={getModuleHeaderCardClasses('cyan')}>
+          <div className="flex flex-wrap items-center justify-between gap-2 pb-2.5 border-b border-cyan-200/70 min-w-0">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="w-9 h-9 rounded-[12px] bg-gradient-to-br from-cyan-500 to-teal-600 text-white flex items-center justify-center shadow-xs shrink-0">
+                <ScanLine className="w-4 h-4 stroke-[2.25]" />
               </div>
-              <h3 className="font-black text-sm text-slate-800">رادیولوژی</h3>
+              <div className="text-right min-w-0">
+                <h3 className="font-black text-sm text-slate-900 leading-none truncate">رادیولوژی دیجیتال OPG، RVG و CBCT</h3>
+                <span className="text-[10.5px] font-bold text-cyan-800 mt-1 block truncate">نگاتوسکوپ هوشمند و آنالیز تراکم استخوان ایمپلنت</span>
+              </div>
             </div>
 
-            <button
-              onClick={() => setShowUploadModal(true)}
-              className="py-1.5 px-3 rounded-xl bg-[#c8ff00] text-black font-extrabold text-xs flex items-center gap-1 shadow-sm active:scale-95 transition-all"
-            >
-              <Upload className="w-3.5 h-3.5 stroke-[2.5]" />
-              <span>بارگذاری رادیوگرافی</span>
-            </button>
+            <div className="flex flex-wrap items-center gap-1.5 min-w-0">
+              <button
+                type="button"
+                onClick={() => {
+                  selection();
+                  setSearchOpen(!searchOpen);
+                }}
+                className={`min-w-[40px] min-h-[40px] rounded-[12px] flex items-center justify-center transition-all cursor-pointer active:scale-95 ${
+                  searchOpen ? 'bg-cyan-600 text-white shadow-2xs' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
+                title="جستجو در آرشیو گرافی‌ها"
+                aria-label="جستجو در آرشیو گرافی‌ها"
+              >
+                <Search className="w-4 h-4 stroke-[2.25]" />
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  impactLight();
+                  setShowNewForm(prev => !prev);
+                }}
+                className="min-h-[40px] px-3 rounded-[12px] bg-gradient-to-l from-cyan-600 to-teal-600 hover:from-cyan-700 hover:to-teal-700 text-white text-xs font-black flex items-center gap-1 shadow-2xs active:scale-95 transition-all cursor-pointer"
+              >
+                <Upload className="w-3.5 h-3.5" />
+                <span>{showNewForm ? 'بستن فرم' : 'ثبت گرافی'}</span>
+              </button>
+            </div>
           </div>
 
-          {/* Search & Filter Bar */}
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 pt-1">
-            <div className="relative flex-1">
-              <Search className="w-3.5 h-3.5 text-slate-400 absolute right-3 top-2.5" />
+          {showNewForm && (
+            <form onSubmit={handleUploadNew} className="my-2 bg-cyan-50/80 border border-cyan-200 rounded-2xl p-3 space-y-2 text-xs">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <div>
+                  <label className="text-[10.5px] font-bold text-slate-700 block mb-1">بیمار</label>
+                  <select
+                    aria-label="انتخاب بیمار برای گرافی"
+                    value={formPatientId}
+                    onChange={(e) => setFormPatientId(e.target.value)}
+                    className="w-full bg-white border border-cyan-200 rounded-xl px-2.5 py-1.5 font-bold text-slate-800"
+                  >
+                    {patients.map((p) => (
+                      <option key={p.id} value={p.id}>{p.fullName} ({p.fileNumber})</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-[10.5px] font-bold text-slate-700 block mb-1">نوع تصویربرداری</label>
+                  <select
+                    aria-label="نوع تصویربرداری"
+                    value={formModality}
+                    onChange={(e) => setFormModality(e.target.value as XRayRecord['modality'])}
+                    className="w-full bg-white border border-cyan-200 rounded-xl px-2.5 py-1.5 font-bold text-slate-800"
+                  >
+                    <option value="OPG (پانورامیک)">OPG (پانورامیک)</option>
+                    <option value="CBCT (سه‌بعدی ایمپلنت)">CBCT (سه‌بعدی ایمپلنت)</option>
+                    <option value="پری‌اپیکال (RVG تک‌دندان)">پری‌اپیکال (RVG تک‌دندان)</option>
+                    <option value="سفالومتری لترال">سفالومتری لترال</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-[10.5px] font-bold text-slate-700 block mb-1">ناحیه فک / دندان</label>
+                  <input
+                    aria-label="ناحیه فک یا دندان"
+                    type="text"
+                    value={formRegion}
+                    onChange={(e) => setFormRegion(e.target.value)}
+                    placeholder="مثلاً: UR6 ایمپلنت"
+                    className="w-full bg-white border border-cyan-200 rounded-xl px-2.5 py-1.5 font-bold text-slate-800"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10.5px] font-bold text-slate-700 block mb-1">تراکم استخوان (Misch)</label>
+                  <select
+                    aria-label="تراکم استخوان گرافی"
+                    value={formBoneDensity}
+                    onChange={(e) => setFormBoneDensity(e.target.value)}
+                    className="w-full bg-white border border-cyan-200 rounded-xl px-2.5 py-1.5 font-bold text-slate-800"
+                  >
+                    <option value="تراکم استخوان تیپ D1 (کورتیکال متراکم)">تیپ D1 (کورتیکال متراکم)</option>
+                    <option value="تراکم استخوان تیپ D2 (مطلوب)">تیپ D2 (مطلوب ایمپلنت)</option>
+                    <option value="تراکم استخوان تیپ D3 (متوسط اسفنجی)">تیپ D3 (متوسط اسفنجی)</option>
+                    <option value="تراکم استخوان تیپ D4 (نیاز به سینوس‌لیفت/پیوند)">تیپ D4 (تراکم پایین)</option>
+                  </select>
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="text-[10.5px] font-bold text-slate-700 block mb-1">گزارش تشخیصی پزشک (اختیاری)</label>
+                  <input
+                    aria-label="گزارش تشخیصی رادیوگرافی"
+                    type="text"
+                    value={formFindings}
+                    onChange={(e) => setFormFindings(e.target.value)}
+                    placeholder="مثلاً: ارتفاع استخوان ۱۰ میلی‌متر، لامینا دورا سالم..."
+                    className="w-full bg-white border border-cyan-200 rounded-xl px-2.5 py-1.5 font-bold text-slate-800"
+                  />
+                </div>
+              </div>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <label className="px-3 py-1.5 rounded-xl bg-white border border-cyan-300 text-cyan-900 font-black flex items-center gap-1.5 cursor-pointer hover:bg-cyan-100/50">
+                  <Camera className="w-3.5 h-3.5 text-cyan-600" />
+                  <span>{formImageDataUrl ? 'تصویر گرافی پیوست شد ✓ (تغییر)' : 'عکسبرداری با دوربین / پیوست کلیشه OPG'}</span>
+                  <input aria-label="بارگذاری یا عکسبرداری کلیشه رادیوگرافی" type="file" accept="image/*" capture="environment" onChange={handleAttachXrayPhoto} className="hidden" />
+                </label>
+                <div className="flex items-center gap-1.5">
+                  <button type="button" onClick={() => setShowNewForm(false)} className="px-3 py-1 rounded-xl bg-white border border-slate-200 text-slate-700 font-bold cursor-pointer">انصراف</button>
+                  <button type="submit" className="px-4 py-1 rounded-xl bg-cyan-600 text-white font-black cursor-pointer">ثبت و آنالیز در PACS</button>
+                </div>
+              </div>
+            </form>
+          )}
+
+          {/* Animated Expandable Search Bar */}
+          {searchOpen && (
+            <div className="relative animate-in slide-in-from-top-1 duration-150">
+              <Search className="w-3.5 h-3.5 text-cyan-600 absolute right-3 top-2.5" />
               <input
+                aria-label="جستجو در کلیشه‌های رادیولوژی"
                 type="text"
-                placeholder="جستجو بر اساس نام بیمار یا ناحیه دندان..."
+                autoFocus
+                placeholder="جستجوی نام بیمار، ناحیه فک یا نوع گرافی..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl pr-8 pl-3 py-1.5 text-xs text-slate-800 focus:outline-none"
+                className="w-full bg-slate-50 border border-cyan-200 rounded-xl pr-8 pl-8 py-1.5 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-cyan-500 shadow-2xs"
               />
-            </div>
-
-            <div className="flex items-center gap-1 overflow-x-auto no-scrollbar">
-              {['all', 'OPG', 'PA', 'Bitewing', 'CBCT'].map(type => (
+              {searchQuery && (
                 <button
-                  key={type}
-                  onClick={() => setTypeFilter(type)}
-                  className={`py-1 px-2.5 rounded-xl text-[11px] font-bold whitespace-nowrap transition-all ${
-                    typeFilter === type
-                      ? 'bg-teal-600 text-white shadow-2xs'
-                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                  }`}
+                  type="button"
+                  aria-label="پاک کردن جستجوی رادیولوژی"
+                  onClick={() => setSearchQuery('')}
+                  className="absolute left-2.5 top-2 text-slate-400 hover:text-slate-600"
                 >
-                  {type === 'all' ? 'همه کلیشه‌ها' : type}
+                  <X className="w-3.5 h-3.5" />
                 </button>
-              ))}
+              )}
             </div>
+          )}
+
+          {/* Horizontal Scrollable Chip Bar */}
+          <div role="tablist" aria-label="بخش‌های ماژول" className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
+            {[
+              { id: 'all', label: `همه گرافی‌ها (${toPersianDigits(records.length)})` },
+              { id: 'OPG', label: 'پانورامیک OPG' },
+              { id: 'CBCT', label: 'سه‌بعدی CBCT ایمپلنت' },
+              { id: 'RVG', label: 'تک‌دندان RVG' },
+              { id: 'cbct3d', label: 'استودیو سه‌بعدی CBCT و اسکن (3D)' }
+            ].map((tab, idx) => {
+              const isActive = selectedModality === tab.id;
+              return (
+                <button role="tab" aria-selected={isActive}
+                  key={tab.id}
+                  type="button"
+                  onClick={() => {
+                    selection();
+                    setSelectedModality(tab.id);
+                  }}
+                  className={`px-3 py-1.5 rounded-xl text-[11px] whitespace-nowrap shrink-0 flex items-center gap-1.5 cursor-pointer ${getUnifiedChipClasses(idx + 3, isActive)}`}
+                >
+                  {tab.id === 'cbct3d' && <Box className="w-3.5 h-3.5" />}
+                  <span>{tab.label}</span>
+                </button>
+              );
+            })}
           </div>
         </div>
       </div>
 
-      {/* Main Interactive Digital Viewer (Teal Medical Light Theme) */}
-      <div className="mx-2">
-        <div className="bg-gradient-to-b from-teal-50/90 via-white to-cyan-50/40 rounded-[24px] border border-teal-200/90 p-3 shadow-md space-y-3 text-slate-800 overflow-hidden">
-          
-          {/* Viewer Top Action Toolbar */}
-          <div className="flex items-center justify-between pb-2 border-b border-teal-100 text-xs">
-            <div className="flex items-center gap-2">
-              <span className="font-mono text-[10px] bg-teal-100 text-teal-800 px-2 py-0.5 rounded-full font-bold">
-                {selectedStudy.type}
-              </span>
-              <span className="font-extrabold text-slate-900 text-xs">{selectedStudy.patientName}</span>
-              <span className="text-[10px] text-slate-500 hidden sm:inline">({selectedStudy.teethArea})</span>
+      {/* 3D CBCT Surgical Planner & Intraoral CAD/CAM Superimposition Studio */}
+      {selectedModality === 'cbct3d' && activeRecord && (() => {
+        const matchedPat = resolvePatient(activeRecord) || patients[0];
+        const extractedTooth = extractToothFromRegion(activeRecord.region);
+        const fallbackImplantCase: ImplantCase = {
+          id: `imp-cbct-${activeRecord.id}`,
+          patientId: matchedPat?.id || 'pat-1',
+          patientName: activeRecord.patientName,
+          toothNumber: `دندان ${extractedTooth}`,
+          brand: 'Straumann BLX (سوئیس)',
+          diameter: '4.1 mm',
+          length: '10 mm',
+          torque: 40,
+          boneGraft: activeRecord.boneDensity.includes('D3') || activeRecord.boneDensity.includes('D4'),
+          membrane: activeRecord.boneDensity.includes('D3') || activeRecord.boneDensity.includes('D4'),
+          surgeryDate: activeRecord.date || getCurrentPersianDate(),
+          healingDueDate: activeRecord.date || getCurrentPersianDate(),
+          doctorName: activeRecord.doctorName || 'دکتر مهدی امیری',
+          currentStage: 'fixture_placed',
+          boneDensity: (activeRecord.boneDensity.includes('D1')
+            ? 'D1'
+            : activeRecord.boneDensity.includes('D3')
+            ? 'D3'
+            : 'D2') as 'D1' | 'D2' | 'D3' | 'D4',
+          notes: activeRecord.aiFindings
+        };
+        const fallbackLabOrder: LabOrder = {
+          id: `lab-cbct-${activeRecord.id}`,
+          patientId: matchedPat?.id || 'pat-1',
+          patientName: activeRecord.patientName,
+          toothNumber: `دندان ${extractedTooth}`,
+          workType: 'روکش زیرکونیا فول‌آناتومیک روی ایمپلنت',
+          labName: 'لابراتوار دیجیتال پارس (CAD/CAM)',
+          shade: 'A2',
+          sendDate: activeRecord.date || getCurrentPersianDate(),
+          deliveryDate: activeRecord.date || getCurrentPersianDate(),
+          appointmentDate: activeRecord.date || getCurrentPersianDate(),
+          status: 'fabrication',
+          cost: 4200000,
+          reminderNotice: 'کنترل تطابق اسکن سه‌بعدی و CBCT'
+        };
+        const patientImplantCases = matchedPat?.implantCases?.length
+          ? matchedPat.implantCases
+          : patients.flatMap((p) => p.implantCases || []);
+        const resolvedImplantCases = patientImplantCases.length ? patientImplantCases : [fallbackImplantCase];
+
+        const patientLabOrders = matchedPat?.labOrders?.length
+          ? matchedPat.labOrders
+          : patients.flatMap((p) => p.labOrders || []);
+        const resolvedLabOrders = patientLabOrders.length ? patientLabOrders : [fallbackLabOrder];
+
+        return (
+          <div data-testid="xray-3d-cbct-studio" className="mx-2 space-y-3 animate-in fade-in duration-200">
+            {/* Study Switcher Bar inside 3D Studio */}
+            <div className="bg-gradient-to-br from-cyan-50 via-white to-teal-50 rounded-[22px] p-3 border border-cyan-200/90 shadow-[var(--shadow-card)] space-y-2">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-xl bg-cyan-600 text-white flex items-center justify-center shadow-2xs">
+                    <Layers className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-black text-slate-900">
+                      انطباق سه‌بعدی رادیولوژی CBCT و اسکن دهانی CAD/CAM ({activeRecord.patientName})
+                    </h4>
+                    <span className="text-[10.5px] font-bold text-cyan-800 block">
+                      ناحیه: {activeRecord.region} · دندان هدف: {extractedTooth} · {activeRecord.boneDensity}
+                    </span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <button
+                    type="button"
+                    onClick={(e) => handleScheduleXrayReminder(activeRecord, e)}
+                    className="px-2.5 py-1.5 rounded-xl text-[10.5px] font-black bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 flex items-center gap-1 cursor-pointer"
+                  >
+                    <BellRing className="w-3.5 h-3.5 text-amber-600" />
+                    <span>ثبت یادآور جراحی / پیگیری CBCT</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedModality('all')}
+                    className="px-2.5 py-1.5 rounded-xl text-[10.5px] font-black bg-slate-100 hover:bg-slate-200 text-slate-700 cursor-pointer"
+                  >
+                    بازگشت به نگاتوسکوپ ۲بعدی
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pt-1">
+                {records.map((rec) => {
+                  const active = rec.id === activeRecord.id;
+                  return (
+                    <button
+                      key={rec.id}
+                      type="button"
+                      onClick={() => {
+                        selection();
+                        setActiveRecordId(rec.id);
+                      }}
+                      className={`px-2.5 py-1 rounded-xl text-[10.5px] font-black whitespace-nowrap shrink-0 border transition-all cursor-pointer ${
+                        active
+                          ? 'bg-cyan-600 text-white border-cyan-700 shadow-2xs'
+                          : 'bg-white text-slate-700 border-cyan-200 hover:bg-cyan-50'
+                      }`}
+                    >
+                      {rec.patientName} · {extractToothFromRegion(rec.region)} ({rec.modality.split(' ')[0]})
+                    </button>
+                  );
+                })}
+              </div>
             </div>
 
-            {/* Viewer Tool Buttons */}
-            <div className="flex items-center gap-1">
-              <button
-                onClick={() => setZoomLevel(prev => Math.min(prev + 0.25, 2.5))}
-                className="p-1.5 rounded-lg bg-teal-50 hover:bg-teal-100 text-teal-700 border border-teal-200 transition-colors"
-                title="بزرگ‌نمایی"
-              >
-                <ZoomIn className="w-3.5 h-3.5" />
-              </button>
-              <button
-                onClick={() => setZoomLevel(prev => Math.max(prev - 0.25, 0.75))}
-                className="p-1.5 rounded-lg bg-teal-50 hover:bg-teal-100 text-teal-700 border border-teal-200 transition-colors"
-                title="کوچک‌نمایی"
-              >
-                <ZoomOut className="w-3.5 h-3.5" />
-              </button>
-              <button
-                onClick={() => setIsInverted(!isInverted)}
-                className={`p-1.5 rounded-lg transition-colors border ${
-                  isInverted ? 'bg-teal-600 text-white font-bold border-teal-600' : 'bg-teal-50 hover:bg-teal-100 text-teal-700 border-teal-200'
-                }`}
-                title="نگاتیو / پوزیتیو"
-              >
-                <Eye className="w-3.5 h-3.5" />
-              </button>
-              <button
-                onClick={() => setMeasuringMode(!measuringMode)}
-                className={`p-1.5 rounded-lg transition-colors border ${
-                  measuringMode ? 'bg-cyan-600 text-white font-bold border-cyan-600' : 'bg-teal-50 hover:bg-teal-100 text-teal-700 border-teal-200'
-                }`}
-                title="خط‌کش کانال ریشه و فیکسچر"
-              >
-                <Ruler className="w-3.5 h-3.5" />
-              </button>
-              <button
-                onClick={resetFilters}
-                className="p-1.5 rounded-lg bg-teal-50 hover:bg-teal-100 text-teal-700 border border-teal-200 transition-colors"
-                title="بازنشانی فیلترها"
-              >
-                <RotateCcw className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          </div>
-
-          {/* Interactive Screen Viewport (Medical Negatoscope Lightbox - Clean Clinical Teal) */}
-          <div 
-            onClick={handleImageClick}
-            className={`relative aspect-video w-full bg-slate-800 rounded-2xl overflow-hidden flex items-center justify-center border border-teal-300/80 shadow-inner ${measuringMode ? 'cursor-crosshair' : ''}`}
-          >
-            <img
-              src={selectedStudy.imageUrl}
-              alt="رادیوگرافی دندانپزشکی"
-              className="max-w-full max-h-full object-contain transition-all duration-200 select-none pointer-events-none"
-              style={{
-                transform: `scale(${zoomLevel})`,
-                filter: `brightness(${brightness}%) contrast(${contrast}%) ${isInverted ? 'invert(1)' : ''}`
+            {/* 1. D3.js 3D CBCT Implant Surgical Planner */}
+            <Implant3DSurgicalPlannerD3
+              implantCases={resolvedImplantCases}
+              patients={patients}
+              onEditImplantCase={(_caseId, updated) => {
+                setToastMsg(`طرح جراحی سه‌بعدی CBCT برای «${activeRecord.patientName}» (${updated.boneDensity || 'D2'}) در PACS ذخیره شد.`);
+                setTimeout(() => setToastMsg(null), 3200);
               }}
             />
 
-            {/* Virtual Millimeter Measuring Grid & Active Caliper Overlay */}
-            {measuringMode && (
-              <div 
-                className="absolute inset-0 pointer-events-none border border-cyan-400/40"
-                style={{
-                  backgroundImage: `linear-gradient(to right, rgba(6,182,212,0.15) 1px, transparent 1px), linear-gradient(to bottom, rgba(6,182,212,0.15) 1px, transparent 1px)`,
-                  backgroundSize: '20px 20px'
-                }}
-              >
-                <div className="absolute top-2 left-2 bg-slate-900/90 text-cyan-300 text-[10px] px-2.5 py-1 rounded-xl border border-cyan-500/50 flex items-center gap-1.5 shadow-md">
-                  <Ruler className="w-3.5 h-3.5 text-cyan-400" />
-                  <span>
-                    {caliperPoints.length === 0 && 'برای اندازه‌گیری، نقطه اول (کرست استخوان) را کلیک کنید'}
-                    {caliperPoints.length === 1 && 'نقطه دوم (کانال عصب یا اپکس) را کلیک کنید'}
-                    {caliperPoints.length === 2 && measuredMm && `طول کالیپر: ${toPersianDigits(measuredMm)} میلی‌متر`}
-                  </span>
-                </div>
-
-                {/* SVG Caliper Line */}
-                <svg className="absolute inset-0 w-full h-full pointer-events-none">
-                  {caliperPoints.map((pt, idx) => (
-                    <circle key={idx} cx={pt.x} cy={pt.y} r="5" fill="#06b6d4" stroke="#ffffff" strokeWidth="2" />
-                  ))}
-                  {caliperPoints.length === 2 && (
-                    <>
-                      <line 
-                        x1={caliperPoints[0].x} 
-                        y1={caliperPoints[0].y} 
-                        x2={caliperPoints[1].x} 
-                        y2={caliperPoints[1].y} 
-                        stroke="#06b6d4" 
-                        strokeWidth="3" 
-                        strokeDasharray="4 2" 
-                      />
-                      {measuredMm && (
-                        <foreignObject 
-                          x={(caliperPoints[0].x + caliperPoints[1].x) / 2 - 40} 
-                          y={(caliperPoints[0].y + caliperPoints[1].y) / 2 - 25} 
-                          width="80" 
-                          height="30"
-                        >
-                          <div className="bg-cyan-900/95 text-white text-[11px] font-mono font-black text-center py-0.5 rounded-lg border border-cyan-300 shadow-md">
-                            {toPersianDigits(measuredMm)} mm
-                          </div>
-                        </foreignObject>
-                      )}
-                    </>
-                  )}
-                </svg>
-
-                <span className="absolute bottom-2 right-2 text-[9px] bg-teal-800 text-cyan-200 font-mono px-2 py-0.5 rounded border border-cyan-400/50">
-                  کالیبره استئوتومی دیجیتال فعال است
-                </span>
-              </div>
-            )}
-
-            {/* AI PATHOLOGY DETECTION BOUNDING BOXES OVERLAY */}
-            <div className="absolute inset-0 pointer-events-none">
-              {/* Box 1: Interproximal Caries */}
-              <div className="absolute top-[32%] right-[38%] w-16 h-14 border-2 border-dashed border-rose-500 rounded-lg bg-rose-500/15 animate-pulse">
-                <span className="absolute -top-5 right-0 bg-rose-600 text-white font-mono text-[9px] font-bold px-1.5 py-0.2 rounded shadow-sm whitespace-nowrap">
-                  پوسیدگی D4 (۹۶٪)
-                </span>
-              </div>
-
-              {/* Box 2: Periapical Radiolucency */}
-              <div className="absolute bottom-[28%] left-[34%] w-18 h-16 border-2 border-dashed border-purple-500 rounded-full bg-purple-500/15">
-                <span className="absolute -bottom-5 left-0 bg-purple-600 text-white font-mono text-[9px] font-bold px-1.5 py-0.2 rounded shadow-sm whitespace-nowrap">
-                  ضایعه پری‌اپیکال (۹۲٪)
-                </span>
-              </div>
-
-              {/* Marker 3: Crestal Bone Level */}
-              <div className="absolute top-[48%] left-[22%] h-0.5 w-24 bg-cyan-400 shadow-sm flex items-center justify-between">
-                <span className="w-1.5 h-1.5 rounded-full bg-cyan-300" />
-                <span className="text-[8px] bg-cyan-900/90 text-cyan-200 font-mono px-1 rounded -translate-y-3">
-                  تحلیل استخوان ۱.۸mm
-                </span>
-                <span className="w-1.5 h-1.5 rounded-full bg-cyan-300" />
-              </div>
-            </div>
+            {/* 2. D3.js 3D CAD/CAM Prosthetic Crown & Abutment Model Viewer */}
+            <Lab3DModelViewerD3
+              orders={resolvedLabOrders}
+              patients={patients}
+              onEditLabOrder={(_orderId, updated) => {
+                setToastMsg(`تأییدیه انطباق سه‌بعدی پروتز و CBCT برای «${activeRecord.patientName}» ثبت شد (${updated.qcPassed ? 'تایید QC' : 'بروزرسانی'}).`);
+                setTimeout(() => setToastMsg(null), 3200);
+              }}
+            />
           </div>
+        );
+      })()}
 
-          {/* Brightness & Contrast Sliders */}
-          <div className="grid grid-cols-2 gap-3 pt-1 text-[11px] text-slate-700 font-bold">
-            <div className="flex items-center gap-2">
-              <Sun className="w-3.5 h-3.5 text-amber-500 shrink-0" />
-              <span className="text-[10px]">روشنایی:</span>
-              <input
-                type="range"
-                min="50"
-                max="180"
-                value={brightness}
-                onChange={(e) => setBrightness(Number(e.target.value))}
-                className="w-full accent-teal-600"
-              />
+      {/* Digital Negatoscope Viewer (Compact on Mobile with Collapsible Diagnostic & Slider Controls) */}
+      {selectedModality !== 'cbct3d' && activeRecord && (
+        <div className="mx-2 bg-gradient-to-br from-cyan-50 via-white to-sky-50 rounded-[24px] p-3.5 text-slate-900 border border-cyan-200/90 shadow-[var(--shadow-card)] space-y-2.5">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div>
+              <span className="text-xs font-black text-cyan-950">{activeRecord.patientName} · {activeRecord.modality}</span>
+              <span className="text-[10px] text-slate-500 font-bold block">{activeRecord.region} · تاریخ: {toPersianDigits(activeRecord.date)}</span>
             </div>
-
-            <div className="flex items-center gap-2">
-              <Contrast className="w-3.5 h-3.5 text-cyan-600 shrink-0" />
-              <span className="text-[10px]">کنتراست:</span>
-              <input
-                type="range"
-                min="50"
-                max="200"
-                value={contrast}
-                onChange={(e) => setContrast(Number(e.target.value))}
-                className="w-full accent-teal-600"
-              />
-            </div>
-          </div>
-
-          {/* Clinical Diagnosis & AI Analysis Button */}
-          <div className="bg-white/90 p-3 rounded-2xl border border-teal-200/90 shadow-2xs space-y-2.5">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                <span className="text-xs font-black text-slate-800">تشخیص هوشمند هوش مصنوعی (AI Dental Vision):</span>
-              </div>
+            <div className="flex items-center gap-1.5 flex-wrap">
               <button
-                onClick={handleAiConsult}
-                disabled={aiLoading}
-                className="py-1 px-3 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-black text-[11px] flex items-center gap-1.5 shadow-2xs active:scale-95 transition-all disabled:opacity-50"
-              >
-                <Sparkles className="w-3.5 h-3.5" />
-                <span>{aiLoading ? 'درحال پردازش تصویر با جمنای...' : 'آنالیز خودکار پاتولوژی'}</span>
-              </button>
-            </div>
-
-            {/* Structured AI Findings */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1 text-xs">
-              <div className="p-2 rounded-xl bg-rose-50 border border-rose-200">
-                <span className="font-bold text-rose-800 block text-[11px] mb-0.5">پوسیدگی بین‌دندانی (Caries)</span>
-                <span className="text-[10.5px] text-rose-700 font-medium">دیستال دندان ۴ بالا (کلاس II) با درگیری عاج</span>
-              </div>
-              <div className="p-2 rounded-xl bg-purple-50 border border-purple-200">
-                <span className="font-bold text-purple-800 block text-[11px] mb-0.5">پری‌اپیکال ریشه (Endo)</span>
-                <span className="text-[10.5px] text-purple-700 font-medium">ضایعه رادیولوسنت آپیکال ریشه مزیال دندان ۶</span>
-              </div>
-              <div className="p-2 rounded-xl bg-cyan-50 border border-cyan-200">
-                <span className="font-bold text-cyan-800 block text-[11px] mb-0.5">سطح استخوان (Bone Level)</span>
-                <span className="text-[10.5px] text-cyan-700 font-medium">تراکم استخوان D2، فاصله تا کانال عصب ۱۱.۲mm</span>
-              </div>
-            </div>
-
-            <div className="flex items-center justify-between pt-1 border-t border-teal-100">
-              <span className="text-[10.5px] text-slate-500">
-                تشخیص بالینی پزشک: {selectedStudy.diagnosis}
-              </span>
-              <button
+                type="button"
                 onClick={() => {
-                  showToast('تشخیص پاتولوژی هوش مصنوعی به طرح درمان چارت پالمر بیمار منتقل شد.');
+                  selection();
+                  setSelectedModality('cbct3d');
                 }}
-                className="py-1 px-2.5 rounded-lg bg-[#c8ff00] text-black font-extrabold text-[10px] flex items-center gap-1 shadow-2xs active:scale-95 transition-all"
+                className="px-2.5 py-1 rounded-xl text-[10px] font-black bg-indigo-50 hover:bg-indigo-100 text-indigo-800 border border-indigo-200 flex items-center gap-1 cursor-pointer"
+                title="شبیه‌ساز سه‌بعدی CBCT و اسکن"
               >
-                <Check className="w-3 h-3 stroke-[3]" />
-                <span>افزودن به طرح درمان چارت بیمار</span>
+                <Box className="w-3 h-3" />
+                <span>نمای 3D CBCT</span>
               </button>
-            </div>
-
-            {aiAnalysis && (
-              <div className="p-3 rounded-xl bg-teal-50 border border-teal-200 text-xs text-teal-900 leading-relaxed whitespace-pre-line animate-in fade-in">
-                {aiAnalysis}
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Thumbnails Archive List */}
-      <div className="mx-2 space-y-2">
-        <div className="flex items-center justify-between px-1">
-          <span className="text-xs font-black text-slate-800">کلیشه‌های آرشیوشده ({toPersianDigits(filteredStudies.length)})</span>
-          <span className="text-[10px] text-slate-400 font-medium">انتخاب جهت مشاهده در ویوور</span>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-          {filteredStudies.map(study => (
-            <div
-              key={study.id}
-              onClick={() => setSelectedStudy(study)}
-              className={`p-3 rounded-2xl bg-white border cursor-pointer transition-all space-y-2 ${
-                selectedStudy.id === study.id
-                  ? 'border-teal-500 ring-2 ring-teal-500/20 shadow-md'
-                  : 'border-slate-100 hover:border-slate-300 shadow-2xs'
-              }`}
-            >
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-black text-slate-900">{study.patientName}</span>
-                <span className="text-[10px] font-mono font-bold bg-teal-50 text-teal-800 px-2 py-0.5 rounded-md">
-                  {study.type}
-                </span>
-              </div>
-
-              <div className="aspect-video w-full bg-teal-950/40 rounded-xl overflow-hidden relative border border-teal-200">
-                <img
-                  src={study.imageUrl}
-                  alt={study.teethArea}
-                  className="w-full h-full object-cover"
-                />
-              </div>
-
-              <div className="flex items-center justify-between text-[10px] text-slate-500">
-                <span>{study.teethArea}</span>
-                <span className="font-mono">{toPersianDigits(study.date)}</span>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Upload Radiology Modal (Teal Medical Light Theme - Zero Black) */}
-      {showUploadModal && (
-        <div className="fixed inset-0 z-50 bg-teal-950/25 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in">
-          <div className="w-full max-w-md bg-gradient-to-b from-teal-50/90 via-white to-cyan-50/50 text-slate-900 rounded-t-[32px] sm:rounded-[28px] border border-teal-200/90 p-5 space-y-4 max-h-[92vh] overflow-y-auto shadow-2xl">
-            <div className="flex items-center justify-between pb-2.5 border-b border-teal-100">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-xl bg-teal-600 text-white flex items-center justify-center shadow-xs">
-                  <Camera className="w-4 h-4" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-black text-slate-900">بارگذاری رادیوگرافی و کلیشه دندانپزشکی</h3>
-                  <span className="text-[10px] text-teal-700 font-bold">بایگانی تصویربرداری فک و صورت</span>
-                </div>
-              </div>
-              <button 
-                onClick={() => setShowUploadModal(false)} 
-                className="w-7 h-7 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-800 flex items-center justify-center transition-colors"
+              <button
+                type="button"
+                onClick={(e) => handleScheduleXrayReminder(activeRecord, e)}
+                className="px-2.5 py-1 rounded-xl text-[10px] font-black bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 flex items-center gap-1 cursor-pointer"
+                title="ثبت یادآور هوشمند پیگیری گرافی"
               >
-                ✕
+                <BellRing className="w-3 h-3 text-amber-600" />
+                <span>یادآور</span>
               </button>
-            </div>
-
-            <form onSubmit={handleCreateStudy} className="space-y-3 text-xs">
-              <div>
-                <label className="text-slate-700 font-bold block mb-1">انتخاب بیمار</label>
-                <select
-                  value={newPatientId}
-                  onChange={(e) => setNewPatientId(e.target.value)}
-                  className="w-full bg-white border border-teal-200 rounded-xl px-3 py-2 text-slate-900 font-medium focus:outline-none focus:border-teal-500 shadow-2xs"
-                >
-                  {patients.map(p => (
-                    <option key={p.id} value={p.id}>{p.fullName} ({p.fileNumber})</option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="text-slate-700 font-bold block mb-1">نوع رادیوگرافی</label>
-                <select
-                  value={newType}
-                  onChange={(e) => setNewType(e.target.value as any)}
-                  className="w-full bg-white border border-teal-200 rounded-xl px-3 py-2 text-slate-900 font-medium focus:outline-none focus:border-teal-500 shadow-2xs"
-                >
-                  <option value="OPG">پانورامیک (OPG)</option>
-                  <option value="PA">پری‌اپیکال (PA)</option>
-                  <option value="Bitewing">بایت‌وینگ (Bitewing)</option>
-                  <option value="CBCT">سه‌بعدی (CBCT)</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="text-slate-700 font-bold block mb-1">فایل رادیوگرافی (عکس یا دوربین)</label>
-                <div className="flex items-center gap-2">
-                  <label className="flex-1 cursor-pointer flex items-center justify-center gap-2 p-3 rounded-xl border-2 border-dashed border-teal-300 hover:border-teal-500 bg-teal-50/60 hover:bg-teal-50 transition-all text-teal-800">
-                    <Upload className="w-4 h-4" />
-                    <span className="font-bold text-xs">
-                      {uploadedImageDataUrl ? 'تصویر انتخاب شد (برای تغییر کلیک کنید)' : 'انتخاب فایل تصویر یا عکس‌برداری'}
-                    </span>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={handleFileUpload}
-                      className="hidden"
-                    />
-                  </label>
-                  {uploadedImageDataUrl && (
-                    <div className="w-12 h-12 rounded-xl overflow-hidden border border-teal-400 shrink-0">
-                      <img src={uploadedImageDataUrl} alt="Preview" className="w-full h-full object-cover" />
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              <div>
-                <label className="text-slate-700 font-bold block mb-1">ناحیه دندان‌ها</label>
-                <input
-                  type="text"
-                  value={newArea}
-                  onChange={(e) => setNewArea(e.target.value)}
-                  placeholder="مثال: فک پایین سمت چپ دندان ۶ و ۷"
-                  className="w-full bg-white border border-teal-200 rounded-xl px-3 py-2 text-slate-900 placeholder-slate-400 focus:outline-none focus:border-teal-500 shadow-2xs"
-                />
-              </div>
-
-              <div>
-                <label className="text-slate-700 font-bold block mb-1">تشخیص اولیه پزشک</label>
-                <textarea
-                  rows={3}
-                  value={newDiagnosis}
-                  onChange={(e) => setNewDiagnosis(e.target.value)}
-                  placeholder="یادداشت‌های بالینی، تحلیل کانال ریشه، تراکم استخوان..."
-                  className="w-full bg-white border border-teal-200 rounded-xl p-3 text-slate-900 placeholder-slate-400 focus:outline-none focus:border-teal-500 shadow-2xs"
-                />
-              </div>
-
-              <div className="pt-2 flex items-center gap-2">
+              {onOpenPatientFile && (() => {
+                const matchedPat = resolvePatient(activeRecord);
+                if (!matchedPat) return null;
+                return (
+                  <button
+                    type="button"
+                    onClick={() => onOpenPatientFile(matchedPat, 'xrays')}
+                    className="px-2.5 py-1 rounded-xl text-[10px] font-black bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 flex items-center gap-1 cursor-pointer"
+                  >
+                    <FolderOpen className="w-3 h-3" />
+                    <span>پرونده بیمار</span>
+                  </button>
+                );
+              })()}
+              <button
+                type="button"
+                onClick={() => {
+                  impactLight();
+                  setZoomLevel(prev => (prev === 1 ? 1.5 : prev === 1.5 ? 2 : 1));
+                }}
+                className={`px-2.5 py-1 rounded-xl text-[10px] font-bold border flex items-center gap-1 transition-all cursor-pointer ${
+                  zoomLevel > 1 ? 'bg-cyan-600 text-white border-cyan-700' : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                }`}
+                title="بزرگ‌نمایی نگاتوسکوپ"
+              >
+                <ZoomIn className="w-3 h-3" />
+                <span className="font-mono">{zoomLevel}x</span>
+              </button>
+              {(brightness !== 105 || contrast !== 115 || invertMode || zoomLevel !== 1) && (
                 <button
                   type="button"
-                  onClick={() => setShowUploadModal(false)}
-                  className="w-1/3 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-colors"
+                  onClick={() => {
+                    selection();
+                    setBrightness(105);
+                    setContrast(115);
+                    setInvertMode(false);
+                    setZoomLevel(1);
+                  }}
+                  className="px-2 py-1 rounded-xl text-[10px] font-black bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 flex items-center gap-1 cursor-pointer"
+                  title="بازنشانی فیلترهای نگاتوسکوپ"
                 >
-                  انصراف
+                  <RotateCcw className="w-3 h-3" />
+                  <span>ریست</span>
                 </button>
-                <button
-                  type="submit"
-                  className="w-2/3 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white text-xs font-black shadow-md shadow-teal-600/25 active:scale-95 transition-all"
-                >
-                  ثبت در پرونده دیجیتال
-                </button>
-              </div>
-            </form>
+              )}
+              <button
+                type="button"
+                onClick={() => {
+                  impactLight();
+                  setInvertMode(!invertMode);
+                }}
+                className={`px-2.5 py-1 rounded-xl text-[10px] font-bold border transition-all cursor-pointer ${
+                  invertMode ? 'bg-cyan-600 text-white border-cyan-700' : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                }`}
+              >
+                نگاتیو / کنتراست
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  selection();
+                  setShowAdvancedControls(!showAdvancedControls);
+                }}
+                className={`px-2.5 py-1 rounded-xl text-[10px] font-black border flex items-center gap-1 transition-all cursor-pointer ${
+                  showAdvancedControls ? 'bg-cyan-600 text-white border-cyan-700' : 'bg-cyan-50 text-cyan-900 border-cyan-200 hover:bg-cyan-100'
+                }`}
+              >
+                <SlidersHorizontal className="w-3 h-3" />
+                <span>{showAdvancedControls ? 'بستن ابزارها' : 'تنظیمات و هوش مصنوعی'}</span>
+                {showAdvancedControls ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+              </button>
+            </div>
           </div>
+
+          {/* Dental Panoramic / Uploaded Radiograph Negatoscope Film Viewport */}
+          <div 
+            className="relative h-36 sm:h-44 rounded-2xl bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 border border-cyan-300/60 flex flex-col items-center justify-center overflow-hidden"
+            style={{
+              filter: `brightness(${brightness}%) contrast(${contrast}%) ${invertMode ? 'invert(1)' : ''}`
+            }}
+          >
+            <div className="w-full h-full flex items-center justify-center transition-transform duration-200" style={{ transform: `scale(${zoomLevel})` }}>
+            {activeRecord.imageDataUrl ? (
+              <img
+                src={activeRecord.imageDataUrl}
+                alt={`گرافی ${activeRecord.patientName}`}
+                className="w-full h-full object-contain"
+              />
+            ) : (
+              <svg viewBox="0 0 400 140" className="w-full h-full opacity-85">
+                <path d="M 30 50 Q 200 85 370 50" fill="none" stroke="#38bdf8" strokeWidth="1.5" strokeDasharray="4 4" />
+                <path d="M 40 95 Q 200 65 360 95" fill="none" stroke="#22d3ee" strokeWidth="1.5" strokeDasharray="4 4" />
+                {[60, 85, 110, 135, 160, 185, 215, 240, 265, 290, 315, 340].map((x, idx) => (
+                  <g key={idx}>
+                    <rect x={x - 7} y={32} width={14} height={24} rx={4} fill={idx === 2 ? '#22d3ee' : '#cbd5e1'} fillOpacity={idx === 2 ? 0.9 : 0.45} />
+                    <rect x={x - 6} y={80} width={12} height={24} rx={4} fill={idx === 8 ? '#f43f5e' : '#cbd5e1'} fillOpacity={idx === 8 ? 0.85 : 0.4} />
+                  </g>
+                ))}
+                <line x1="110" y1="15" x2="110" y2="62" stroke="#a3e635" strokeWidth="2" />
+                <text x="116" y="26" fill="#a3e635" fontSize="10" fontFamily="monospace" fontWeight="bold">9.5mm Bone (D2)</text>
+              </svg>
+            )}
+            </div>
+
+            <div className="absolute bottom-2 right-3 left-3 flex items-center justify-between text-[10px] font-mono text-cyan-200 bg-slate-950/75 px-2.5 py-1 rounded-lg">
+              <span>{activeRecord.boneDensity}</span>
+              <span>DICOM 16-bit · PACS</span>
+            </div>
+          </div>
+
+          {/* Compact 1-Line AI Summary Bar (Always Visible) */}
+          {!showAdvancedControls && (
+            <div
+              onClick={() => {
+                selection();
+                setShowAdvancedControls(true);
+              }}
+              className="p-2 rounded-xl bg-cyan-50 border border-cyan-200 flex items-center justify-between gap-2 text-[10.5px] cursor-pointer hover:bg-cyan-100/70 transition-colors"
+            >
+              <div className="flex items-center gap-1.5 min-w-0">
+                <Sparkles className="w-3.5 h-3.5 text-cyan-700 shrink-0" />
+                <span className="text-cyan-950 truncate font-bold">{activeRecord.aiFindings}</span>
+              </div>
+              <span className="text-[9.5px] font-black text-cyan-700 shrink-0">جزئیات بیشتر ▾</span>
+            </div>
+          )}
+
+          {/* Collapsible Sliders & AI Diagnostic Details */}
+          {showAdvancedControls && (
+            <div className="space-y-2.5 pt-1 animate-in fade-in duration-150">
+              {/* Brightness & Contrast Sliders */}
+              <div className="grid grid-cols-2 gap-3 text-[10.5px]">
+                <div className="flex items-center gap-2 bg-white border border-slate-200 p-2 rounded-xl">
+                  <SunMedium className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                  <span className="text-slate-700 font-bold shrink-0">روشنایی:</span>
+                  <input aria-label="روشنایی"
+                    type="range"
+                    min="70"
+                    max="150"
+                    value={brightness}
+                    onChange={(e) => setBrightness(Number(e.target.value))}
+                    className="w-full accent-cyan-600"
+                  />
+                </div>
+                <div className="flex items-center gap-2 bg-white border border-slate-200 p-2 rounded-xl">
+                  <Contrast className="w-3.5 h-3.5 text-cyan-600 shrink-0" />
+                  <span className="text-slate-700 font-bold shrink-0">کنتراست:</span>
+                  <input aria-label="کنتراست"
+                    type="range"
+                    min="70"
+                    max="160"
+                    value={contrast}
+                    onChange={(e) => setContrast(Number(e.target.value))}
+                    className="w-full accent-cyan-600"
+                  />
+                </div>
+              </div>
+
+              {/* AI Pathology Detection Metrics */}
+              <div className="grid grid-cols-3 gap-2 text-[10px]">
+                <div className="p-2 rounded-xl bg-white border border-amber-200 flex flex-col">
+                  <span className="text-slate-500">غربالگری پوسیدگی</span>
+                  <span className="font-black text-amber-800 mt-0.5">۱ ضایعه پروگزیمال (D2)</span>
+                </div>
+                <div className="p-2 rounded-xl bg-white border border-emerald-200 flex flex-col">
+                  <span className="text-slate-500">فاصله از عصب IAN</span>
+                  <span className="font-mono font-black text-emerald-700 mt-0.5">Safe &gt; 3.2 mm</span>
+                </div>
+                <div className="p-2 rounded-xl bg-white border border-cyan-200 flex flex-col">
+                  <span className="text-slate-500">پیشنهاد فیکسچر</span>
+                  <span className="font-mono font-black text-cyan-800 mt-0.5">Ø 4.1 × 10 mm</span>
+                </div>
+              </div>
+
+              {/* D3.js Cross-Sectional Hounsfield Unit (HU) Bone Density Profile Chart */}
+              <div className="p-2.5 rounded-xl bg-white border border-cyan-200 space-y-1.5">
+                <div className="flex items-center justify-between text-[10.5px]">
+                  <span className="font-black text-slate-800">
+                    پروفایل تراکم استخوان هانسفیلد (D3.js HU Cross-Section)
+                  </span>
+                  <span className="font-mono font-black text-cyan-700">
+                    میانگین: {toPersianDigits(huProfileData.meanHu)} HU ({activeRecord.boneDensity})
+                  </span>
+                </div>
+                <svg
+                  data-testid="xray-d3-hu-profile-svg"
+                  viewBox={`0 0 ${huProfileData.width} ${huProfileData.height}`}
+                  className="w-full h-22 overflow-visible"
+                >
+                  <defs>
+                    <linearGradient id="xrayHuAreaGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#0891b2" stopOpacity="0.38" />
+                      <stop offset="100%" stopColor="#06b6d4" stopOpacity="0.04" />
+                    </linearGradient>
+                  </defs>
+                  <line
+                    x1={28}
+                    y1={huProfileData.yScale(850)}
+                    x2={huProfileData.width - 14}
+                    y2={huProfileData.yScale(850)}
+                    stroke="#10b981"
+                    strokeDasharray="3 3"
+                    strokeWidth="1"
+                  />
+                  <text x={32} y={huProfileData.yScale(850) - 3} fontSize="7.5" fill="#047857" fontWeight="bold">
+                    مرز کورتیکال D1/D2 (850 HU)
+                  </text>
+                  <path d={huProfileData.areaPath} fill="url(#xrayHuAreaGrad)" />
+                  <path d={huProfileData.linePath} fill="none" stroke="#0891b2" strokeWidth="2.2" />
+                  {huProfileData.points.map((pt, i) => (
+                    <g key={i}>
+                      <circle
+                        cx={huProfileData.xScale(pt.depthMm)}
+                        cy={huProfileData.yScale(pt.hu)}
+                        r={3.2}
+                        fill={pt.depthMm >= 9.5 ? '#f43f5e' : '#0891b2'}
+                        stroke="#ffffff"
+                        strokeWidth="1.2"
+                      />
+                      <text
+                        x={huProfileData.xScale(pt.depthMm)}
+                        y={huProfileData.height - 4}
+                        textAnchor="middle"
+                        fontSize="7.5"
+                        fill="#475569"
+                        fontFamily="monospace"
+                      >
+                        {pt.depthMm}mm
+                      </text>
+                    </g>
+                  ))}
+                </svg>
+              </div>
+
+              {/* AI & Doctor Editable Diagnostic Report Box */}
+              <div className="p-2.5 rounded-xl bg-cyan-50 border border-cyan-200 space-y-2 text-[11px]">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-1.5">
+                    <Sparkles className="w-4 h-4 text-cyan-700 shrink-0" />
+                    <span className="font-black text-cyan-950">یافته‌های تشخیصی و گزارش پزشک:</span>
+                  </div>
+                  {editingFindingsId === activeRecord.id ? (
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => setEditingFindingsId(null)}
+                        className="px-2 py-0.5 rounded-lg bg-white border border-slate-200 text-slate-600 text-[10px] font-bold cursor-pointer"
+                      >
+                        انصراف
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleSaveEditedFindings(activeRecord.id)}
+                        className="px-2.5 py-0.5 rounded-lg bg-cyan-600 hover:bg-cyan-700 text-white text-[10px] font-black flex items-center gap-1 cursor-pointer"
+                      >
+                        <Save className="w-3 h-3" />
+                        <span>ذخیره گزارش</span>
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditingFindingsId(activeRecord.id);
+                        setEditingFindingsText(activeRecord.aiFindings);
+                      }}
+                      className="px-2 py-0.5 rounded-lg bg-white hover:bg-cyan-100 text-cyan-900 border border-cyan-200 text-[10px] font-black flex items-center gap-1 cursor-pointer"
+                    >
+                      <Edit3 className="w-3 h-3" />
+                      <span>ویرایش گزارش</span>
+                    </button>
+                  )}
+                </div>
+                {editingFindingsId === activeRecord.id ? (
+                  <textarea
+                    aria-label="ویرایش گزارش تشخیصی رادیوگرافی"
+                    rows={2}
+                    value={editingFindingsText}
+                    onChange={(e) => setEditingFindingsText(e.target.value)}
+                    className="w-full bg-white border border-cyan-300 rounded-xl p-2 text-slate-800 text-[11px] leading-relaxed focus:outline-none focus:border-cyan-500"
+                  />
+                ) : (
+                  <p className="text-slate-700 leading-relaxed">{activeRecord.aiFindings}</p>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       )}
+
+      {/* Archived Studies List with Numbered Badges & Right Accent Borders */}
+      <div className="mx-2 space-y-2">
+        <h4 className="text-xs font-black text-slate-700 px-1">کلیشه‌های آرشیوشده در پرونده بیماران ({toPersianDigits(filteredRecords.length)})</h4>
+        {filteredRecords.map((rec, index) => {
+          const isSelected = activeRecordId === rec.id;
+          return (
+            <div
+              key={rec.id}
+              onClick={() => {
+                selection();
+                setActiveRecordId(rec.id);
+              }}
+              className={`p-3 rounded-[20px] border border-r-[3px] border-r-cyan-500 shadow-[var(--shadow-card)] transition-all cursor-pointer flex items-center justify-between gap-2 ${
+                isSelected
+                  ? 'bg-cyan-50/90 border-cyan-400 ring-1 ring-cyan-300'
+                  : 'bg-white border-slate-200/90 hover:border-cyan-200'
+              }`}
+            >
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="relative shrink-0">
+                  <div className="w-9 h-9 rounded-xl bg-cyan-100 text-cyan-700 flex items-center justify-center font-black">
+                    <ScanLine className="w-4 h-4" />
+                  </div>
+                  <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 rounded-full bg-cyan-600 text-white text-[9px] font-mono font-black flex items-center justify-center border border-white shadow-2xs">
+                    #{toPersianDigits(index + 1)}
+                  </span>
+                </div>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-xs font-black text-slate-900 truncate">{rec.patientName}</span>
+                    <span className="px-2 py-0.5 rounded-md bg-cyan-100 text-cyan-900 text-[9.5px] font-bold">{rec.modality}</span>
+                  </div>
+                  <span className="text-[10.5px] text-slate-500 block mt-0.5 truncate">{rec.region} · {rec.doctorName}</span>
+                </div>
+              </div>
+              <div className="flex items-center gap-1.5 shrink-0">
+                <span className="text-[10px] font-mono font-bold text-slate-500 hidden xs:inline">{toPersianDigits(rec.date)}</span>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    selection();
+                    setActiveRecordId(rec.id);
+                    setSelectedModality('cbct3d');
+                  }}
+                  className="min-w-[38px] min-h-[38px] px-2 rounded-[12px] bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 flex items-center justify-center gap-1 text-[10px] font-black cursor-pointer transition-colors active:scale-95"
+                  title="باز کردن در استودیو سه‌بعدی CBCT و اسکن"
+                  aria-label="باز کردن در استودیو سه‌بعدی CBCT و اسکن"
+                >
+                  <Box className="w-3.5 h-3.5" />
+                  <span>3D</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => handleScheduleXrayReminder(rec, e)}
+                  className="min-w-[38px] min-h-[38px] rounded-[12px] bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 flex items-center justify-center cursor-pointer transition-colors active:scale-95"
+                  title="ثبت یادآور هوشمند پیگیری گرافی"
+                  aria-label="ثبت یادآور هوشمند پیگیری گرافی"
+                >
+                  <BellRing className="w-3.5 h-3.5" />
+                </button>
+                {onOpenPatientFile && (() => {
+                  const matchedPat = resolvePatient(rec);
+                  if (!matchedPat) return null;
+                  return (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onOpenPatientFile(matchedPat, 'xrays');
+                      }}
+                      className="min-w-[38px] min-h-[38px] rounded-[12px] bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 flex items-center justify-center cursor-pointer transition-colors active:scale-95"
+                      title="باز کردن پرونده بیمار"
+                      aria-label="باز کردن پرونده بیمار"
+                    >
+                      <FolderOpen className="w-3.5 h-3.5" />
+                    </button>
+                  );
+                })()}
+                {records.length > 1 && (
+                  confirmDeleteId === rec.id ? (
+                    <button
+                      type="button"
+                      onClick={(e) => handleDeleteRecord(rec.id, e)}
+                      className="min-h-[38px] px-2.5 rounded-[12px] bg-rose-600 hover:bg-rose-700 text-white border border-rose-700 flex items-center justify-center gap-1 text-[10px] font-black cursor-pointer"
+                      aria-label="تایید حذف کلیشه رادیولوژی"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>تایید حذف ✓</span>
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={(e) => handleDeleteRecord(rec.id, e)}
+                      className="min-w-[38px] min-h-[38px] rounded-[12px] bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 flex items-center justify-center cursor-pointer transition-colors active:scale-95"
+                      title="حذف کلیشه"
+                      aria-label="حذف کلیشه رادیولوژی"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  )
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 };

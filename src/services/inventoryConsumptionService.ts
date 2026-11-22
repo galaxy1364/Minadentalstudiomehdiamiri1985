@@ -291,6 +291,85 @@ class InventoryConsumptionService {
   }
 
   /**
+   * Surgical implant BOM deduction: 1 brand-matched sterile fixture + lidocaine + needle + optional bone graft & membrane
+   */
+  deductSuppliesForImplantSurgery(
+    params: { brand?: string; boneGraft?: boolean; membrane?: boolean },
+    currentInventory: InventoryItem[]
+  ): ConsumptionResult {
+    const deductedItems: ConsumptionResult['deductedItems'] = [];
+    const criticalAlerts: ConsumptionResult['criticalAlerts'] = [];
+
+    const updatedInventory = currentInventory.map(item => ({ ...item }));
+    const consumedIds = new Set<string>();
+
+    const deductOneMatch = (keywords: string[], qty: number) => {
+      const target = updatedInventory.find(
+        item =>
+          !consumedIds.has(item.id) &&
+          item.stock > 0 &&
+          keywords.some(kw => {
+            const k = kw.toLowerCase();
+            return item.name.toLowerCase().includes(k) || item.category.toLowerCase().includes(k);
+          })
+      );
+      if (!target) return;
+      consumedIds.add(target.id);
+      const qtyToDeduct = Math.min(target.stock, qty);
+      const newStock = Math.max(0, target.stock - qtyToDeduct);
+      const isBelow = newStock <= target.minAlert;
+      target.stock = newStock;
+
+      deductedItems.push({
+        itemId: target.id,
+        itemName: target.name,
+        amountDeducted: qtyToDeduct,
+        remainingStock: newStock,
+        isBelowAlert: isBelow
+      });
+      if (isBelow) {
+        criticalAlerts.push({
+          itemId: target.id,
+          itemName: target.name,
+          currentStock: newStock,
+          minAlert: target.minAlert
+        });
+      }
+    };
+
+    const brandTokens = (params.brand || '')
+      .replace(/[()]/g, ' ')
+      .split(/\s+/)
+      .filter(w => w.length >= 3);
+    // 1. Prefer exact brand fixture, fallback to generic fixture
+    const fixtureMatchedBefore = deductedItems.length;
+    if (brandTokens.length > 0) {
+      deductOneMatch(brandTokens, 1);
+    }
+    if (deductedItems.length === fixtureMatchedBefore) {
+      deductOneMatch(['فیکسچر', 'ایمپلنت'], 1);
+    }
+
+    // 2. Anesthetic & surgical needles
+    deductOneMatch(['لیدوکائین', 'بی‌حسی'], 2);
+    deductOneMatch(['سوزن'], 2);
+
+    // 3. Optional GBR biomaterials
+    if (params.boneGraft) {
+      deductOneMatch(['پودر استخوان', 'پیوند استخوان', 'استخوان', 'graft'], 1);
+    }
+    if (params.membrane) {
+      deductOneMatch(['ممبرین', 'membrane', 'کلاژن'], 1);
+    }
+
+    return {
+      updatedInventory,
+      deductedItems,
+      criticalAlerts
+    };
+  }
+
+  /**
    * Generates a recommended re-order purchase order based on current low stock items
    */
   generateAutoPurchaseOrder(

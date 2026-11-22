@@ -1,0 +1,60 @@
+{
+  "lockedAt": "2026-11-06",
+  "pluginsInstalled": ["clsx", "tailwind-merge", "zod", "motion", "lucide-react"],
+  "screenshotAuditFixes": [
+    {
+      "screenshot": "Screenshot_20261106_215216_Chrome_8a5997ce.jpg",
+      "module": "New Appointment Sheet",
+      "fixes": [
+        "Full-bleed mobile sheet with sticky header and footer",
+        "Removed verbose subtitle 'رادار زنده تشخیص تداخل یونیت و ساعت'",
+        "Enlarged time slot pills with clear readable Persian typography",
+        "Added 2-step confirmation before final appointment creation"
+      ]
+    },
+    {
+      "screenshot": "Screenshot_20261106_215143_Chrome_55308cc6.jpg",
+      "module": "Patients View & Top Header",
+      "fixes": [
+        "Removed dark fingerprint Audit button from TopHeader",
+        "Removed visible MD-PAT-1405-1001 badge from patient cards",
+        "Removed verbose header subtitle",
+        "Fixed horizontal clipping on patient card action buttons using responsive 4-column grid + collapsible timeline"
+      ]
+    },
+    {
+      "screenshot": "Screenshot_20261106_215203_Chrome_7f81ceff.jpg",
+      "module": "Finance View Debtors Cards",
+      "fixes": [
+        "Translated raw English treatment keys (implant, crown_zirconia, composite, endo, laminate) into Persian clinical titles"
+      ]
+    },
+    {
+      "screenshot": "Screenshot_20261106_215210_Chrome_78405b93.jpg",
+      "module": "Appointments View",
+      "fixes": [
+        "Replaced dark #0f1b13 time badge with bright sky-blue pastel badge",
+        "Removed duplicate always-visible search box in header card",
+        "Removed visible MD-APT-1405-1001 badge"
+      ]
+    },
+    {
+      "screenshot": "Screenshot_20261106_215152_Chrome_c75d8b1e.jpg",
+      "module": "Palmer Chart Modal",
+      "fixes": [
+        "Converted Palmer Chart modal to full-page mobile sheet with ViewportModalPortal so header is never clipped",
+        "Formatted tariff input display in Persian digits",
+        "Removed verbose commission text and added 2-step confirmation before saving treatment"
+      ]
+    },
+    {
+      "screenshot": "Screenshot_20261106_215158_Chrome_a34e9925.jpg",
+      "module": "Finance View Top",
+      "fixes": [
+        "Eliminated .000000 trailing decimal zeroes in formatExactMicroToman and formatToman",
+        "Removed dark 'موتور Materialized View سوپابیس' technical card from UI",
+        "Removed 'دقت ۱ میلیونم (10^-6)' badge and verbose explanatory text"
+      ]
+    }
+  ]
+}

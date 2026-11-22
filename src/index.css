@@ -1,14 +1,286 @@
 @import "tailwindcss";
+@custom-variant dark (&:where(.theme-dark, .theme-dark *));
+
+/* ==========================================================================
+   MINADENTAL INDUSTRIAL DESIGN SYSTEM TOKENS (iOS 27 + WCAG 2.2 AA/AAA)
+   4px/8px Spacing Scale · Nested Radius Math · Single-Elevation Surfaces
+   ========================================================================== */
+:root {
+  /* Advanced Vazirmatn Clinical Typography Tokens */
+  --font-sans: 'Vazirmatn', 'Vazirmatn VF', Tahoma, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono: 'Vazirmatn', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  --leading-clinical: 1.6;
+  --leading-display: 1.6;
+  --leading-body: 1.6;
+  --font-weight-display: 900;
+  --font-weight-heading: 800;
+  --font-weight-subheading: 700;
+  --font-weight-body: 400;
+  --font-weight-body-medium: 500;
+  --font-weight-meta: 500;
+  --font-weight-numeric: 700;
+  --font-weight-numeric-strong: 800;
+
+  /* 4px / 8px Spacing Scale */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+
+  /* Radius Hierarchy (r_inner = r_outer - padding) */
+  --radius-outer: 20px;
+  --radius-card: 20px;
+  --radius-sheet: 28px;
+  --radius-inner: 12px;
+  --radius-control: 12px;
+  --radius-pill: 9999px;
+
+  /* Semantic Surfaces & Ink Tokens (Light Mode Default) */
+  --surface-page: #f8fafc;
+  --surface-card: #ffffff;
+  --surface-elevated: rgba(255, 255, 255, 0.94);
+  --surface-subtle: #f1f5f9;
+  --ink-primary: #0f172a;
+  --ink-secondary: #334155;
+  --ink-muted: #475569;
+  --border-hairline: rgba(15, 23, 42, 0.1);
+  --border-strong: rgba(15, 23, 42, 0.18);
+
+  /* Single-Elevation Shadow Tokens */
+  --shadow-card: 0 2px 10px -2px rgba(15, 23, 42, 0.06), 0 1px 3px rgba(15, 23, 42, 0.04);
+  --shadow-elevated: 0 10px 28px -6px rgba(15, 23, 42, 0.12), 0 4px 10px -2px rgba(15, 23, 42, 0.05);
+  --shadow-dock: 0 10px 30px -4px rgba(15, 23, 42, 0.14), inset 0 1px 0 rgba(255, 255, 255, 0.92);
+
+  /* Touch Target & Sticky Viewport Budget */
+  --touch-target-min: 44px;
+  --header-height-mobile: 54px;
+  --dock-height-mobile: 48px;
+  --sticky-module-top: 8px;
+
+  /* Motion Timing Curves */
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-ios: cubic-bezier(0.32, 0.72, 0, 1);
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+
+  /* Semantic Z-Index Scale */
+  --z-sticky: 20;
+  --z-header: 30;
+  --z-dock: 50;
+  --z-modal: 100;
+  --z-toast: 130;
+
+  /* Dashboard Tile Stagger Timing */
+  --stagger-base: 30ms;
+  --stagger-step: 42ms;
+}
+
+html.theme-dark {
+  --surface-page: #0b0d14;
+  --surface-card: #121622;
+  --surface-elevated: rgba(18, 22, 34, 0.94);
+  --surface-subtle: #1b2133;
+  --ink-primary: #f8fafc;
+  --ink-secondary: #cbd5e1;
+  --ink-muted: #94a3b8;
+  --border-hairline: rgba(255, 255, 255, 0.1);
+  --border-strong: rgba(255, 255, 255, 0.2);
+  --shadow-card: 0 4px 16px -2px rgba(0, 0, 0, 0.45);
+  --shadow-elevated: 0 14px 36px -6px rgba(0, 0, 0, 0.6);
+  --shadow-dock: 0 10px 30px -4px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+html.theme-high-contrast {
+  --surface-page: #000000;
+  --surface-card: #0a0a0a;
+  --surface-elevated: #0a0a0a;
+  --surface-subtle: #141414;
+  --ink-primary: #ffffff;
+  --ink-secondary: #f8fafc;
+  --ink-muted: #e2e8f0;
+  --border-hairline: #525252;
+  --border-strong: #a3a3a3;
+}
 
 @layer base {
-  body {
-    font-family: 'Vazirmatn', system-ui, -apple-system, sans-serif;
+  html {
+    font-family: var(--font-sans);
+    font-weight: var(--font-weight-body);
+    line-height: 1.6;
+    font-optical-sizing: auto;
+    -webkit-text-size-adjust: 100%;
+    text-rendering: optimizeLegibility;
+    background-color: var(--surface-page);
+    color: var(--ink-primary);
+    width: 100%;
+    max-width: 100vw;
+    overflow-x: hidden;
+    overscroll-behavior-x: none;
+    box-sizing: border-box;
+  }
+
+  body,
+  #root {
+    font-family: var(--font-sans);
+    font-weight: var(--font-weight-body);
+    line-height: 1.6;
+    background-color: var(--surface-page);
+    color: var(--ink-primary);
     -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
     -webkit-tap-highlight-color: transparent;
+    width: 100%;
+    max-width: 100vw;
+    min-width: 0;
+    overflow-x: hidden;
+    overscroll-behavior-x: none;
+    box-sizing: border-box;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-left: env(safe-area-inset-left, 0px);
+    padding-right: env(safe-area-inset-right, 0px);
+  }
+
+  main#main-content,
+  main#main-content > div {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    overflow-x: hidden;
+    box-sizing: border-box;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-sans);
+    line-height: 1.6;
+    text-wrap: balance;
+    letter-spacing: -0.015em;
+  }
+
+  h1 {
+    font-weight: var(--font-weight-display);
+  }
+
+  h2 {
+    font-weight: var(--font-weight-heading);
+  }
+
+  h3, h4 {
+    font-weight: var(--font-weight-subheading);
+  }
+
+  p, ul, ol, li, dd, dt, blockquote, section, article, main, aside, td, th, label, input, select, textarea, button {
+    font-family: var(--font-sans);
+    line-height: 1.6;
+  }
+
+  p, li, dd {
+    font-weight: var(--font-weight-body);
+  }
+
+  .font-mono,
+  .tabular-nums,
+  [data-numeric="true"],
+  table,
+  td,
+  th {
+    font-variant-numeric: tabular-nums lining-nums;
+    font-feature-settings: "tnum" 1, "lnum" 1;
+    line-height: 1.6;
+  }
+
+  .tabular-nums,
+  [data-numeric="true"] {
+    font-family: var(--font-sans);
+  }
+
+  /* Accessible Keyboard & Switch Focus Ring */
+  button:focus-visible,
+  a:focus-visible,
+  input:focus-visible,
+  select:focus-visible,
+  textarea:focus-visible,
+  [role="button"]:focus-visible,
+  [tabindex]:focus-visible {
+    outline: 2px solid #0284c7;
+    outline-offset: 2px;
   }
 }
 
-/* Halftone / Dot-matrix glowing ambient background used in the screenshot headers */
+/* ==========================================================================
+   VAZIRMATN CLINICAL TYPOGRAPHY ROLE SYSTEM (Headings / Body / Numerics)
+   ========================================================================== */
+.typo-display {
+  font-family: var(--font-sans);
+  font-weight: var(--font-weight-display);
+  line-height: 1.6;
+  letter-spacing: -0.02em;
+}
+
+.typo-heading {
+  font-family: var(--font-sans);
+  font-weight: var(--font-weight-heading);
+  line-height: 1.6;
+  letter-spacing: -0.015em;
+}
+
+.typo-subheading {
+  font-family: var(--font-sans);
+  font-weight: var(--font-weight-subheading);
+  line-height: 1.6;
+  letter-spacing: -0.01em;
+}
+
+.typo-body {
+  font-family: var(--font-sans);
+  font-weight: var(--font-weight-body);
+  line-height: 1.6;
+}
+
+.typo-body-medium {
+  font-family: var(--font-sans);
+  font-weight: var(--font-weight-body-medium);
+  line-height: 1.6;
+}
+
+.typo-caption {
+  font-family: var(--font-sans);
+  font-weight: var(--font-weight-meta);
+  line-height: 1.6;
+}
+
+.typo-numeric {
+  font-family: var(--font-sans);
+  font-weight: var(--font-weight-numeric);
+  line-height: 1.6;
+  font-variant-numeric: tabular-nums lining-nums;
+  font-feature-settings: "tnum" 1, "lnum" 1;
+}
+
+.typo-numeric-strong {
+  font-family: var(--font-sans);
+  font-weight: var(--font-weight-numeric-strong);
+  line-height: 1.6;
+  font-variant-numeric: tabular-nums lining-nums;
+  font-feature-settings: "tnum" 1, "lnum" 1;
+}
+
+/* ==========================================================================
+   SEMANTIC SURFACE & CARD PRIMITIVES
+   ========================================================================== */
+.ds-card {
+  background-color: var(--surface-card);
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+}
+
+.ds-card-inner {
+  border-radius: var(--radius-inner);
+  border: 1px solid var(--border-hairline);
+}
+
 .bg-dot-matrix {
   background-image: radial-gradient(rgba(204, 255, 0, 0.22) 1.5px, transparent 1.5px);
   background-size: 14px 14px;
@@ -19,7 +291,6 @@
   background-size: 12px 12px;
 }
 
-/* Neon lime glow helpers */
 .glow-lime {
   box-shadow: 0 0 25px -4px rgba(204, 255, 0, 0.45);
 }
@@ -28,7 +299,6 @@
   box-shadow: 0 0 12px -2px rgba(204, 255, 0, 0.35);
 }
 
-/* Hide scrollbar for clean app experience */
 .no-scrollbar::-webkit-scrollbar {
   display: none;
 }
@@ -37,9 +307,8 @@
   scrollbar-width: none;
 }
 
-/* Tactile active button feedback */
 .active-press {
-  transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transition: transform 0.25s var(--ease-spring);
   will-change: transform;
 }
 .active-press:active {
@@ -50,417 +319,1056 @@
 /* ==========================================================================
    Q-BANK AUTHENTIC DASHBOARD MODULE TILES
    CSS Selector: .dashboard-view .grid .tile
-   Full-width edge-to-edge stretching with high-precision one-sided curvature
-   Enhanced Pronounced 'Active-Press' Animation & Tactile Response for Touch-First Terminals
    ========================================================================== */
 .dashboard-view {
   width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: hidden;
+  box-sizing: border-box;
+  line-height: 1.6;
+}
+
+/* Soft Color-Separated Clinical Dashboard Zones */
+.dashboard-zone {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  box-sizing: border-box;
+  border-radius: 18px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-hairline);
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+  line-height: 1.6;
+}
+
+@media (min-width: 640px) {
+  .dashboard-zone {
+    padding: 12px 14px;
+  }
+}
+
+.dashboard-zone-reception {
+  background-color: rgba(240, 249, 255, 0.72);
+  border-color: rgba(14, 165, 233, 0.2);
+}
+
+.dashboard-zone-finance {
+  background-color: rgba(236, 253, 245, 0.72);
+  border-color: rgba(16, 185, 129, 0.2);
+}
+
+.dashboard-zone-clinical {
+  background-color: rgba(250, 245, 255, 0.72);
+  border-color: rgba(168, 85, 247, 0.2);
+}
+
+.dashboard-zone-operations {
+  background-color: rgba(255, 251, 235, 0.72);
+  border-color: rgba(245, 158, 11, 0.22);
+}
+
+.dashboard-view .card-metadata,
+.dashboard-view .tile-metadata,
+.dashboard-view .tile-badge-meta,
+.dashboard-view .tile-title-group span:not(:first-child) {
+  font-weight: var(--font-weight-meta);
+  line-height: 1.6;
+  letter-spacing: -0.01em;
+  -webkit-font-smoothing: antialiased;
 }
 
 .dashboard-view .grid {
   display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  grid-auto-rows: minmax(min-content, max-content);
+  gap: clamp(10px, 1.5vw, 16px);
   width: 100%;
+  max-width: 100%;
+  min-width: 0;
   box-sizing: border-box;
   align-items: stretch;
 }
 
+@media (min-width: 600px) {
+  .dashboard-view .grid.grid-cols-2 {
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    grid-auto-rows: minmax(min-content, max-content);
+  }
+}
+
+@media (max-width: 599px) {
+  .dashboard-view .grid.grid-cols-2 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-auto-rows: minmax(min-content, max-content);
+  }
+}
+
+.dashboard-view .grid.grid-cols-1 {
+  grid-template-columns: minmax(0, 1fr);
+  grid-auto-rows: minmax(min-content, max-content);
+}
+
+.dashboard-view .grid.grid-cols-3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-auto-rows: minmax(min-content, max-content);
+}
+
+@media (min-width: 640px) {
+  .dashboard-view .grid.sm\:grid-cols-4 {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-auto-rows: minmax(min-content, max-content);
+  }
+}
+
+/* iOS 27 Tactile Mechanical Key Tile with Brand-Purple Soft Gradient, >=48px Touch Area & Vazirmatn 1.6 Typography */
 .dashboard-view .grid .tile {
+  --tile-index: 0;
+  --stagger-delay: calc(var(--stagger-base, 30ms) + (var(--tile-index, 0) * var(--stagger-step, 42ms)));
+  --content-delay: calc(var(--stagger-delay) + 18ms);
+  --icon-delay: calc(var(--stagger-delay) + 42ms);
+  --action-delay: calc(var(--stagger-delay) + 64ms);
   width: 100%;
-  min-width: 0;
+  max-width: 100%;
+  min-width: 48px;
+  height: 100%;
+  min-height: 72px;
+  padding: 12px 14px;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
+  justify-content: space-between;
+  align-self: stretch;
   position: relative;
   box-sizing: border-box;
+  border-radius: var(--radius-card);
+  background: linear-gradient(138deg, #ffffff 0%, #faf5ff 52%, #efe4ff 100%);
+  font-family: 'Vazirmatn', var(--font-sans);
+  line-height: 1.6;
+  box-shadow: 0 4px 24px -2px rgba(109, 40, 217, 0.12), 0 2px 8px -2px rgba(139, 92, 246, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.92);
+  filter: drop-shadow(0 4px 16px rgba(109, 40, 217, 0.07));
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
   user-select: none;
   transform-origin: center center;
-  will-change: transform, filter;
-  /* Spring-back recovery when touched/clicked on tactile dental terminal screens */
-  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), 
-              filter 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: transform, box-shadow, filter;
+  animation: tile-stagger-fade-in 0.45s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+  animation-delay: var(--stagger-delay, 30ms);
+  transition:
+    transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1),
+    box-shadow 0.26s cubic-bezier(0.22, 1, 0.36, 1),
+    background 0.28s ease,
+    filter 0.24s var(--ease-out-expo);
 }
 
-/* Pronounced 'active-press' tactile sink simulating a mechanical terminal key/tile */
-.dashboard-view .grid .tile:active,
-.dashboard-view .grid .tile.is-pressing {
-  transform: scale(0.95) translateY(3.2px);
-  filter: drop-shadow(0 2px 5px rgba(0, 0, 0, 0.15)) brightness(0.97);
-  transition: transform 0.06s cubic-bezier(0.1, 0.9, 0.2, 1), 
-              filter 0.06s ease-out;
+/* Outer drag/reorder wrapper around FolderCard keeps a crisp 2px touch gutter while inner .tile renders the Q-Bank card */
+.dashboard-view .grid .tile:has(> .tile),
+.dashboard-view .grid .tile:has(> div > .tile) {
+  padding: 2px;
+  min-width: 48px;
+  min-height: 72px;
+  background: transparent;
+  box-shadow: none;
+  filter: none;
 }
 
-/* Coordinated tactile response for the circular chevron action button */
-.dashboard-view .grid .tile:active .tile-action-button,
-.dashboard-view .grid .tile.is-pressing .tile-action-button {
-  transform: scale(0.85) translateY(1.5px);
-  background-color: #c8ff00;
-  color: #000000;
-  border-color: #b8f000;
-  box-shadow: 0 0 12px rgba(200, 255, 0, 0.5);
-  transition: transform 0.06s cubic-bezier(0.1, 0.9, 0.2, 1), 
-              background-color 0.06s ease-out,
-              box-shadow 0.06s ease-out;
+/* Dedicated Vazirmatn Typography Class for Tile Card Content (Title & Body Text with line-height: 1.6) */
+.tile-card-typography,
+.dashboard-view .grid .tile .tile-card-typography,
+.dashboard-view .grid .tile .tile-contents,
+.dashboard-view .grid .tile .tile-contents *,
+.dashboard-view .grid .tile .tile-title-group,
+.dashboard-view .grid .tile .tile-title-group span,
+.dashboard-view .grid .tile .tile-metadata,
+.dashboard-view .grid .tile .tile-badge-meta {
+  font-family: 'Vazirmatn', var(--font-sans);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-/* Coordinated tactile response for the neon icon squircle container */
-.dashboard-view .grid .tile:active .tile-icon-box,
-.dashboard-view .grid .tile.is-pressing .tile-icon-box {
-  transform: scale(0.93) translateY(1px);
-  transition: transform 0.06s cubic-bezier(0.1, 0.9, 0.2, 1);
+.tile-card-title,
+.dashboard-view .grid .tile .tile-card-title,
+.dashboard-view .grid .tile .tile-title-group span:first-child {
+  font-family: 'Vazirmatn', var(--font-sans);
+  font-weight: var(--font-weight-heading);
+  line-height: 1.6;
+  letter-spacing: -0.015em;
 }
 
-/* ==========================================================================
-   SUBTLE STAGGERED ENTRANCE ANIMATION FOR .dashboard-view .grid .tile CONTENTS
-   Modern & Premium iOS 27 / Q-Bank tactile dashboard entrance using CSS transitions
-   ========================================================================== */
-@keyframes tile-stagger-fade-in {
+.tile-card-text,
+.dashboard-view .grid .tile .tile-card-text,
+.dashboard-view .grid .tile .tile-metadata {
+  font-family: 'Vazirmatn', var(--font-sans);
+  font-weight: var(--font-weight-meta);
+  line-height: 1.6;
+}
+
+@keyframes tile-hover-depth {
   0% {
-    opacity: 0;
-    transform: translateY(12px) scale(0.985);
-  }
-  100% {
-    opacity: 1;
     transform: translateY(0) scale(1);
+    box-shadow: 0 4px 24px -2px rgba(109, 40, 217, 0.12), 0 2px 8px -2px rgba(139, 92, 246, 0.08);
   }
-}
-
-@keyframes tile-content-entrance {
-  0% {
-    opacity: 0;
-    transform: translateY(8px);
+  58% {
+    transform: translateY(-4.5px) scale(1.014);
   }
   100% {
-    opacity: 1;
-    transform: translateY(0);
+    transform: translateY(-3.5px) scale(1.01);
+    box-shadow:
+      0 14px 32px -6px rgba(124, 58, 237, 0.24),
+      0 6px 16px -4px rgba(168, 85, 247, 0.16),
+      0 0 0 1.5px rgba(168, 85, 247, 0.32),
+      inset 0 1px 0 rgba(255, 255, 255, 0.98);
   }
 }
 
-@keyframes tile-icon-entrance {
-  0% {
-    opacity: 0;
-    transform: scale(0.82) rotate(-3deg);
-  }
-  60% {
-    transform: scale(1.05) rotate(0.5deg);
-  }
-  100% {
-    opacity: 1;
-    transform: scale(1) rotate(0deg);
-  }
+.dashboard-view .grid .tile:hover {
+  transform: translateY(-3.5px) scale(1.01);
+  background: linear-gradient(138deg, #ffffff 0%, #f5edff 48%, #e9d5ff 100%);
+  box-shadow:
+    0 14px 32px -6px rgba(124, 58, 237, 0.24),
+    0 6px 16px -4px rgba(168, 85, 247, 0.16),
+    0 0 0 1.5px rgba(168, 85, 247, 0.32),
+    inset 0 1px 0 rgba(255, 255, 255, 0.98);
+  filter: drop-shadow(0 10px 24px rgba(124, 58, 237, 0.16));
+  animation: tile-hover-depth 0.26s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  z-index: 22;
 }
 
-/* Base entrance transition rules for .dashboard-view .grid .tile */
-.dashboard-view .grid .tile {
-  animation: tile-stagger-fade-in 0.45s cubic-bezier(0.16, 1, 0.3, 1) backwards;
+.dashboard-view .grid .tile:has(> .tile):hover,
+.dashboard-view .grid .tile:has(> div > .tile):hover {
+  background: transparent;
+  box-shadow: none;
+  filter: none;
 }
 
-/* Contents within .dashboard-view .grid .tile using CSS transitions */
+/* Prevent compounded translateY when outer wrapper and inner FolderCard both carry .tile */
+.dashboard-view .grid .tile:hover .tile:hover {
+  transform: none;
+  animation: none;
+}
+
+.dashboard-view .grid .tile .tile-badge-meta {
+  font-weight: var(--font-weight-numeric);
+  line-height: 1.6;
+  font-variant-numeric: tabular-nums lining-nums;
+  font-feature-settings: "tnum" 1, "lnum" 1;
+  transition: color 0.15s ease, background-color 0.15s ease;
+}
+
+.dashboard-view .grid .tile .tile-badge-meta.badge-text-white {
+  color: #ffffff;
+}
+
+.dashboard-view .grid .tile .tile-badge-meta.badge-text-black {
+  color: #0f172a;
+}
+
+.dashboard-view .grid .tile .tile-badge-meta.badge-light-outline {
+  text-shadow: 0 0.5px 1px rgba(0, 0, 0, 0.2);
+}
+
+.dashboard-view .grid .tile .tile-touch-target,
+.dashboard-view .grid .tile::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  min-width: 48px;
+  min-height: 48px;
+  border-radius: 20px;
+  pointer-events: none;
+  z-index: 0;
+  background: transparent;
+}
+
+.dashboard-view .grid .tile::after {
+  background: linear-gradient(115deg, rgba(255, 255, 255, 0) 30%, rgba(192, 132, 252, 0.18) 52%, rgba(255, 255, 255, 0) 74%);
+  opacity: 0;
+  transform: translateX(35%);
+  transition: opacity 0.28s ease, transform 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.dashboard-view .grid .tile:hover::after {
+  opacity: 1;
+  transform: translateX(-20%);
+}
+
+.dashboard-view .grid .tile:has(> .tile)::after,
+.dashboard-view .grid .tile:has(> div > .tile)::after {
+  display: none;
+}
+
 .dashboard-view .grid .tile .tile-contents {
-  transition: opacity 0.45s cubic-bezier(0.16, 1, 0.3, 1), 
-              transform 0.45s cubic-bezier(0.16, 1, 0.3, 1);
-  will-change: opacity, transform;
+  position: relative;
+  z-index: 10;
+  flex: 1 1 auto;
+  height: 100%;
+  min-height: 48px;
+  padding: 2px 4px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  transition:
+    opacity 0.4s var(--ease-out-expo),
+    transform 0.4s var(--ease-out-expo),
+    min-height 0.2s ease,
+    padding 0.2s ease;
+  transition-delay: var(--content-delay, 48ms);
 }
 
 .dashboard-view .grid .tile .tile-icon-box {
-  transition: opacity 0.45s cubic-bezier(0.34, 1.56, 0.64, 1), 
-              transform 0.45s cubic-bezier(0.34, 1.56, 0.64, 1);
-  will-change: opacity, transform;
+  position: relative;
+  z-index: 12;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition:
+    opacity 0.4s var(--ease-spring),
+    transform 0.32s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transition-delay: var(--icon-delay, 72ms);
+}
+
+.dashboard-view .grid .tile .tile-title-group {
+  width: 100%;
+  min-width: 0;
 }
 
 .dashboard-view .grid .tile .tile-action-button {
-  transition: opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1), 
-              transform 0.4s cubic-bezier(0.16, 1, 0.3, 1),
-              background-color 0.2s ease,
-              border-color 0.2s ease;
-  will-change: opacity, transform;
+  min-width: 48px;
+  min-height: 48px;
+  padding: 10px;
+  transition:
+    opacity 0.35s var(--ease-out-expo),
+    transform 0.2s var(--ease-spring),
+    background-color 0.2s ease,
+    border-color 0.2s ease;
+  transition-delay: var(--action-delay, 94ms);
 }
 
-.dashboard-view .grid .tile .tile-title-group,
-.dashboard-view .grid .tile .tile-shelf,
-.dashboard-view .grid .tile .today-revenue-widget {
-  transition: opacity 0.42s cubic-bezier(0.16, 1, 0.3, 1), 
-              transform 0.42s cubic-bezier(0.16, 1, 0.3, 1);
-  will-change: opacity, transform;
+/* Tactile Physical Mechanical Button-Press Animation (Active State) */
+@keyframes tile-physical-press {
+  0% {
+    transform: translateY(-2px) scale(1.004);
+    box-shadow:
+      0 10px 24px -4px rgba(124, 58, 237, 0.2),
+      0 4px 12px -2px rgba(168, 85, 247, 0.12);
+    filter: brightness(1);
+  }
+  48% {
+    transform: translateY(4px) scale(0.955);
+    box-shadow:
+      0 1px 2px rgba(88, 28, 135, 0.16),
+      inset 0 3px 8px rgba(88, 28, 135, 0.2),
+      inset 0 1px 2px rgba(15, 23, 42, 0.12);
+    filter: brightness(0.965);
+  }
+  100% {
+    transform: translateY(3px) scale(0.964);
+    box-shadow:
+      0 2px 5px rgba(88, 28, 135, 0.14),
+      inset 0 2px 6px rgba(88, 28, 135, 0.16),
+      inset 0 1px 2px rgba(15, 23, 42, 0.1);
+    filter: brightness(0.975);
+  }
 }
 
-/* CSS Transition states when Dashboard loads (is-loading vs is-loaded) */
-.dashboard-view.is-loading .grid .tile .tile-contents {
-  opacity: 0;
-  transform: translateY(8px);
-}
-.dashboard-view.is-loading .grid .tile .tile-icon-box {
-  opacity: 0;
-  transform: scale(0.85);
-}
-.dashboard-view.is-loading .grid .tile .tile-action-button {
-  opacity: 0;
-  transform: translateY(6px) scale(0.9);
-}
-
-.dashboard-view.is-loaded .grid .tile .tile-contents {
-  opacity: 1;
-  transform: translateY(0);
-}
-.dashboard-view.is-loaded .grid .tile .tile-icon-box {
-  opacity: 1;
-  transform: scale(1);
-}
-.dashboard-view.is-loaded .grid .tile .tile-action-button {
-  opacity: 1;
-  transform: translateY(0) scale(1);
+.dashboard-view .grid .tile:active,
+.dashboard-view .grid .tile.is-pressing {
+  animation: tile-physical-press 0.15s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  transform: translateY(3px) scale(0.964);
+  box-shadow:
+    0 2px 5px rgba(88, 28, 135, 0.14),
+    inset 0 2px 6px rgba(88, 28, 135, 0.16),
+    inset 0 1px 2px rgba(15, 23, 42, 0.1);
+  transition:
+    transform 0.08s cubic-bezier(0.2, 0.9, 0.3, 1),
+    box-shadow 0.08s ease-out,
+    filter 0.08s ease-out;
 }
 
-/* Staggered CSS transition delays across tiles and their internal contents */
-.dashboard-view .grid .tile:nth-child(1) { animation-delay: 35ms; }
-.dashboard-view .grid .tile:nth-child(1) .tile-contents { transition-delay: 50ms; }
-.dashboard-view .grid .tile:nth-child(1) .tile-icon-box { transition-delay: 75ms; }
-.dashboard-view .grid .tile:nth-child(1) .tile-action-button { transition-delay: 95ms; }
+.dashboard-view .grid .tile:has(> .tile):active,
+.dashboard-view .grid .tile:has(> div > .tile):active {
+  animation: none;
+  transform: none;
+  box-shadow: none;
+  filter: none;
+}
 
-.dashboard-view .grid .tile:nth-child(2) { animation-delay: 75ms; }
-.dashboard-view .grid .tile:nth-child(2) .tile-contents { transition-delay: 90ms; }
-.dashboard-view .grid .tile:nth-child(2) .tile-icon-box { transition-delay: 115ms; }
-.dashboard-view .grid .tile:nth-child(2) .tile-action-button { transition-delay: 135ms; }
+.dashboard-view .grid .tile:active .tile-action-button,
+.dashboard-view .grid .tile.is-pressing .tile-action-button {
+  transform: translateY(2.5px) scale(0.9);
+  box-shadow: inset 0 2px 4px rgba(88, 28, 135, 0.2);
+}
 
-.dashboard-view .grid .tile:nth-child(3) { animation-delay: 115ms; }
-.dashboard-view .grid .tile:nth-child(3) .tile-contents { transition-delay: 130ms; }
-.dashboard-view .grid .tile:nth-child(3) .tile-icon-box { transition-delay: 155ms; }
-.dashboard-view .grid .tile:nth-child(3) .tile-action-button { transition-delay: 175ms; }
+.dashboard-view .grid .tile:hover .tile-icon-box {
+  transform: scale(1.09) translateY(-2px);
+}
 
-.dashboard-view .grid .tile:nth-child(4) { animation-delay: 155ms; }
-.dashboard-view .grid .tile:nth-child(4) .tile-contents { transition-delay: 170ms; }
-.dashboard-view .grid .tile:nth-child(4) .tile-icon-box { transition-delay: 195ms; }
-.dashboard-view .grid .tile:nth-child(4) .tile-action-button { transition-delay: 215ms; }
+.dashboard-view .grid .tile:active .tile-icon-box,
+.dashboard-view .grid .tile.is-pressing .tile-icon-box {
+  transform: scale(0.93) translateY(2px);
+}
 
-.dashboard-view .grid .tile:nth-child(5) { animation-delay: 195ms; }
-.dashboard-view .grid .tile:nth-child(5) .tile-contents { transition-delay: 210ms; }
-.dashboard-view .grid .tile:nth-child(5) .tile-icon-box { transition-delay: 235ms; }
-.dashboard-view .grid .tile:nth-child(5) .tile-action-button { transition-delay: 255ms; }
+@keyframes tile-drag-hint {
+  0% { transform: scale(0.975) translateY(1.5px) rotate(0deg); }
+  45% { transform: scale(1.03) translateY(-2.5px) rotate(-1deg); }
+  100% { transform: scale(1.025) translateY(-2px) rotate(0.8deg); }
+}
 
-.dashboard-view .grid .tile:nth-child(6) { animation-delay: 235ms; }
-.dashboard-view .grid .tile:nth-child(6) .tile-contents { transition-delay: 250ms; }
-.dashboard-view .grid .tile:nth-child(6) .tile-icon-box { transition-delay: 275ms; }
-.dashboard-view .grid .tile:nth-child(6) .tile-action-button { transition-delay: 295ms; }
+.dashboard-view .grid .tile.is-drag-hint {
+  animation: tile-drag-hint 0.36s var(--ease-spring) forwards;
+  z-index: 45;
+}
 
-.dashboard-view .grid .tile:nth-child(7) { animation-delay: 275ms; }
-.dashboard-view .grid .tile:nth-child(7) .tile-contents { transition-delay: 290ms; }
-.dashboard-view .grid .tile:nth-child(7) .tile-icon-box { transition-delay: 315ms; }
-.dashboard-view .grid .tile:nth-child(7) .tile-action-button { transition-delay: 335ms; }
+@keyframes tile-spring-pop {
+  0% { transform: scale(1) translateY(0); }
+  35% { transform: scale(1.04) translateY(-3px); }
+  65% { transform: scale(0.985) translateY(1px); }
+  100% { transform: scale(1) translateY(0); }
+}
 
-.dashboard-view .grid .tile:nth-child(8) { animation-delay: 315ms; }
-.dashboard-view .grid .tile:nth-child(8) .tile-contents { transition-delay: 330ms; }
-.dashboard-view .grid .tile:nth-child(8) .tile-icon-box { transition-delay: 355ms; }
-.dashboard-view .grid .tile:nth-child(8) .tile-action-button { transition-delay: 375ms; }
+.dashboard-view .grid .tile.is-quick-action-popping,
+.dashboard-view .grid .tile.spring-pop {
+  animation: tile-spring-pop 0.45s var(--ease-spring) both;
+  z-index: 30;
+}
 
-.dashboard-view .grid .tile:nth-child(9) { animation-delay: 355ms; }
-.dashboard-view .grid .tile:nth-child(9) .tile-contents { transition-delay: 370ms; }
-.dashboard-view .grid .tile:nth-child(9) .tile-icon-box { transition-delay: 395ms; }
-.dashboard-view .grid .tile:nth-child(9) .tile-action-button { transition-delay: 415ms; }
+/* Accessibility Font Scales */
+html.font-scale-large { font-size: 114%; }
+html.font-scale-xlarge { font-size: 128%; }
+
+html.font-scale-large .dashboard-view .grid .tile,
+html.font-scale-xlarge .dashboard-view .grid .tile,
+html.font-scale-large .dashboard-view .grid .tile .tile-contents,
+html.font-scale-xlarge .dashboard-view .grid .tile .tile-contents {
+  min-height: 112px;
+}
+
+html.font-scale-xlarge .dashboard-view .grid:not(.grid-cols-2) {
+  grid-template-columns: minmax(0, 1fr) !important;
+  gap: 10px !important;
+}
+
+/* Clinical Telemetry Light inside Icon Box */
+.dashboard-view .grid .tile .tile-icon-box .status-light {
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  z-index: 25;
+  pointer-events: none;
+}
+
+.dashboard-view .grid .tile .tile-icon-box .status-light.status-in-chair > span:last-child { background-color: #10b981; }
+.dashboard-view .grid .tile .tile-icon-box .status-light.status-lab-pending > span:last-child { background-color: #f59e0b; }
+.dashboard-view .grid .tile .tile-icon-box .status-light.status-urgent > span:last-child { background-color: #f43f5e; }
+.dashboard-view .grid .tile .tile-icon-box .status-light.status-admitted > span:last-child { background-color: #3b82f6; }
+.dashboard-view .grid .tile .tile-icon-box .status-light.status-completed > span:last-child { background-color: #a855f7; }
+
+/* Overlays, Drag & Multi-Select States */
+@keyframes tile-overlay-pop {
+  0% { opacity: 0; transform: scale(0.94) translateY(6px); }
+  100% { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.dashboard-view .grid .tile .tile-longpress-overlay,
+.dashboard-view .grid .tile .tile-fast-note-overlay {
+  position: absolute;
+  top: -6px;
+  left: 4px;
+  right: 4px;
+  z-index: 55;
+  border-radius: 18px;
+  animation: tile-overlay-pop 0.2s var(--ease-spring) forwards;
+  box-shadow: var(--shadow-elevated), 0 0 0 1.5px rgba(168, 85, 247, 0.7);
+}
+
+.dashboard-view .grid .tile.is-dragging {
+  opacity: 0.45;
+  transform: scale(0.95) rotate(-1.5deg);
+  cursor: grabbing;
+}
+
+.dashboard-view .grid .tile.is-drag-over {
+  transform: scale(1.03) translateY(-2px);
+  box-shadow: 0 12px 24px -4px rgba(168, 85, 247, 0.24), 0 0 0 2px rgba(168, 85, 247, 0.85);
+  z-index: 35;
+}
+
+.dashboard-view .grid .tile.is-selected-tile {
+  transform: translateY(-2px) scale(1.01);
+  box-shadow: 0 10px 22px -4px rgba(8, 145, 178, 0.2), 0 0 0 2px rgba(6, 182, 212, 0.9);
+  z-index: 25;
+}
+
+.dashboard-view .grid .tile.is-bulk-dragging-member {
+  opacity: 0.7;
+  transform: scale(0.96) rotate(-1deg);
+  box-shadow: 4px 4px 0 0 rgba(147, 51, 234, 0.3), 8px 8px 0 0 rgba(6, 182, 212, 0.22);
+}
+
+@keyframes tile-bulk-gap-reflow {
+  0% { transform: translateY(14px) scale(0.94); opacity: 0.78; }
+  55% { transform: translateY(-4px) scale(1.02); opacity: 1; }
+  100% { transform: translateY(0) scale(1); opacity: 1; }
+}
+
+.dashboard-view .grid .tile.bulk-gap-reflow,
+.dashboard-view .grid .tile.is-bulk-gap-reflowing {
+  animation: tile-bulk-gap-reflow 0.52s var(--ease-spring) both;
+  animation-delay: var(--reflow-stagger-delay, 0ms);
+}
+
+.dashboard-view .bulk-action-floating-toolbar {
+  box-shadow: 0 20px 42px -6px rgba(15, 23, 42, 0.5), 0 0 0 1px rgba(34, 211, 238, 0.35);
+}
+
+.dashboard-view .grid .clinic-group-container {
+  position: relative;
+  backdrop-filter: blur(10px);
+  box-shadow: var(--shadow-card);
+}
+
+/* Entrance Stagger Keyframes */
+@keyframes tile-stagger-fade-in {
+  0% { opacity: 0; transform: translateY(12px) scale(0.975); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.dashboard-view.is-loading .grid .tile .tile-contents { opacity: 0; transform: translateY(8px); }
+.dashboard-view.is-loading .grid .tile .tile-icon-box { opacity: 0; transform: scale(0.88); }
+.dashboard-view.is-loading .grid .tile .tile-action-button { opacity: 0; transform: translateY(4px) scale(0.92); }
+.dashboard-view.is-loaded .grid .tile .tile-contents { opacity: 1; transform: translateY(0); }
+.dashboard-view.is-loaded .grid .tile .tile-icon-box { opacity: 1; transform: scale(1); }
+.dashboard-view.is-loaded .grid .tile .tile-action-button { opacity: 1; transform: translateY(0) scale(1); }
+
+.dashboard-view .grid .tile:nth-child(1) { --tile-index: 0; }
+.dashboard-view .grid .tile:nth-child(2) { --tile-index: 1; }
+.dashboard-view .grid .tile:nth-child(3) { --tile-index: 2; }
+.dashboard-view .grid .tile:nth-child(4) { --tile-index: 3; }
+.dashboard-view .grid .tile:nth-child(5) { --tile-index: 4; }
+.dashboard-view .grid .tile:nth-child(6) { --tile-index: 5; }
+.dashboard-view .grid .tile:nth-child(7) { --tile-index: 6; }
+.dashboard-view .grid .tile:nth-child(8) { --tile-index: 7; }
+.dashboard-view .grid .tile:nth-child(9) { --tile-index: 8; }
+.dashboard-view .grid .tile:nth-child(10) { --tile-index: 9; }
+.dashboard-view .grid .tile:nth-child(11) { --tile-index: 10; }
+.dashboard-view .grid .tile:nth-child(12) { --tile-index: 11; }
 
 /* ==========================================================================
    ANIMATED GEMINI FLUID AURORA KEYFRAMES
-   Smooth, organic, hardware-accelerated movement
    ========================================================================== */
 @keyframes gemini-aurora-1 {
-  0% {
-    transform: translate3d(0, 0, 0) scale(1) rotate(0deg);
-  }
-  33% {
-    transform: translate3d(8%, 10%, 0) scale(1.15) rotate(40deg);
-  }
-  66% {
-    transform: translate3d(-6%, 8%, 0) scale(0.92) rotate(80deg);
-  }
-  100% {
-    transform: translate3d(4%, -5%, 0) scale(1.08) rotate(120deg);
-  }
+  0% { transform: translate3d(0, 0, 0) scale(1) rotate(0deg); }
+  50% { transform: translate3d(6%, 8%, 0) scale(1.12) rotate(60deg); }
+  100% { transform: translate3d(-4%, 4%, 0) scale(1.04) rotate(120deg); }
 }
 
 @keyframes gemini-aurora-2 {
-  0% {
-    transform: translate3d(0, 0, 0) scale(1) rotate(0deg);
-  }
-  33% {
-    transform: translate3d(-10%, -6%, 0) scale(1.18) rotate(-45deg);
-  }
-  66% {
-    transform: translate3d(6%, -10%, 0) scale(0.95) rotate(-90deg);
-  }
-  100% {
-    transform: translate3d(-4%, 6%, 0) scale(1.12) rotate(-135deg);
-  }
+  0% { transform: translate3d(0, 0, 0) scale(1) rotate(0deg); }
+  50% { transform: translate3d(-8%, -6%, 0) scale(1.15) rotate(-60deg); }
+  100% { transform: translate3d(4%, -4%, 0) scale(1.06) rotate(-120deg); }
 }
 
 @keyframes gemini-aurora-3 {
-  0% {
-    transform: translate3d(0, 0, 0) scale(0.95);
-    opacity: 0.65;
-  }
-  50% {
-    transform: translate3d(6%, -8%, 0) scale(1.22);
-    opacity: 0.85;
-  }
-  100% {
-    transform: translate3d(-6%, 6%, 0) scale(1);
-    opacity: 0.65;
-  }
+  0% { transform: translate3d(0, 0, 0) scale(0.95); opacity: 0.65; }
+  50% { transform: translate3d(6%, -8%, 0) scale(1.2); opacity: 0.85; }
+  100% { transform: translate3d(-6%, 6%, 0) scale(1); opacity: 0.65; }
 }
 
-.gemini-blob-1 {
-  animation: gemini-aurora-1 22s ease-in-out infinite alternate;
-  will-change: transform;
-}
+.gemini-blob-1 { animation: gemini-aurora-1 22s ease-in-out infinite alternate; will-change: transform; }
+.gemini-blob-2 { animation: gemini-aurora-2 26s ease-in-out infinite alternate; will-change: transform; }
+.gemini-blob-3 { animation: gemini-aurora-3 18s ease-in-out infinite alternate; will-change: transform, opacity; }
 
-.gemini-blob-2 {
-  animation: gemini-aurora-2 26s ease-in-out infinite alternate;
-  will-change: transform;
-}
-
-.gemini-blob-3 {
-  animation: gemini-aurora-3 18s ease-in-out infinite alternate;
-  will-change: transform, opacity;
-}
-
-/* Realistic swinging bell animation for notification badge */
-@keyframes bell-ring {
-  0% { transform: rotate(0deg); }
-  8% { transform: rotate(18deg); }
-  16% { transform: rotate(-18deg); }
-  24% { transform: rotate(14deg); }
-  32% { transform: rotate(-14deg); }
-  40% { transform: rotate(8deg); }
-  48% { transform: rotate(-6deg); }
-  56% { transform: rotate(0deg); }
-  100% { transform: rotate(0deg); }
+/* Single Authoritative Realistic Pendulum Bell Swing */
+@keyframes real-bell-swing {
+  0%, 100% { transform: rotate(0deg); }
+  12% { transform: rotate(18deg); }
+  24% { transform: rotate(-16deg); }
+  36% { transform: rotate(12deg); }
+  48% { transform: rotate(-8deg); }
+  60% { transform: rotate(4deg); }
+  75% { transform: rotate(0deg); }
 }
 
 .animate-bell-ring {
-  animation: bell-ring 3s cubic-bezier(0.36, 0.07, 0.19, 0.97) infinite;
   transform-origin: top center;
+  animation: real-bell-swing 2.4s cubic-bezier(0.36, 0.07, 0.19, 0.97) infinite;
+  will-change: transform;
+}
+
+/* Shimmer Skeleton Wave */
+@keyframes dental-shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.dental-shimmer {
+  background: linear-gradient(90deg, rgba(226, 232, 240, 0.55) 25%, rgba(248, 250, 252, 0.95) 50%, rgba(226, 232, 240, 0.55) 75%);
+  background-size: 200% 100%;
+  animation: dental-shimmer 1.6s ease-in-out infinite;
 }
 
 /* ==========================================================================
-   CLINICAL ACCESSIBILITY & ERGONOMIC THEMES (WCAG 2.2 AAA)
+   iOS 27 VIEW TRANSITIONS, SHEET PHYSICS & DOCK KEYS
    ========================================================================== */
-
-/* 1. Deep OLED Surgical Dark Mode */
-html.theme-dark body,
-body.theme-dark {
-  background-color: #0b0d14 !important;
-  color: #f1f5f9 !important;
+@keyframes ios27-view-enter {
+  0% { opacity: 0.82; transform: translate3d(0, 4px, 0); }
+  100% { opacity: 1; transform: translate3d(0, 0, 0); }
 }
 
-html.theme-dark .bg-white {
-  background-color: #121520 !important;
-  color: #f8fafc !important;
+.animate-view-enter {
+  animation: ios27-view-enter 0.18s var(--ease-ios);
 }
 
-html.theme-dark .bg-slate-50 {
-  background-color: #171b29 !important;
+.ios27-dock-key {
+  transition:
+    transform 0.25s var(--ease-spring),
+    background-color 0.18s ease,
+    box-shadow 0.18s ease;
+  will-change: transform;
 }
 
-html.theme-dark .bg-slate-100 {
-  background-color: #1e2436 !important;
-  color: #e2e8f0 !important;
+.ios27-dock-key:active {
+  transform: translateY(2.5px) scale(0.94);
+  transition: transform 0.07s cubic-bezier(0.4, 0, 1, 1);
 }
 
-html.theme-dark .text-slate-900 {
-  color: #f8fafc !important;
+@keyframes ios27-sheet-present {
+  0% { opacity: 0; transform: translate3d(0, 24px, 0) scale(0.985); }
+  100% { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
 }
 
+.ios27-sheet-enter {
+  animation: ios27-sheet-present 0.32s var(--ease-ios) forwards;
+}
+
+@keyframes ios27-card-mutation-glow {
+  0% { transform: scale(0.985); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.55); }
+  30% { transform: scale(1.01); box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.25); }
+  100% { transform: scale(1); box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.3); }
+}
+
+.ios27-mutation-flash {
+  animation: ios27-card-mutation-glow 0.6s var(--ease-spring) forwards;
+}
+
+@keyframes ios27-error-shake-anim {
+  0%, 100% { transform: translate3d(0, 0, 0); }
+  20% { transform: translate3d(-6px, 0, 0); }
+  40% { transform: translate3d(5px, 0, 0); }
+  60% { transform: translate3d(-4px, 0, 0); }
+  80% { transform: translate3d(2px, 0, 0); }
+}
+
+.ios27-conflict-shake {
+  animation: ios27-error-shake-anim 0.4s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+}
+
+@keyframes ios27-hud-drop {
+  0% { opacity: 0; transform: translate3d(0, -14px, 0) scale(0.96); }
+  100% { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
+}
+
+.ios27-hud-enter {
+  animation: ios27-hud-drop 0.26s var(--ease-spring) forwards;
+}
+
+/* ==========================================================================
+   CLEAN DARK & HIGH-CONTRAST TOKEN ADAPTERS
+   ========================================================================== */
+html.theme-dark body {
+  background-color: var(--surface-page);
+  color: var(--ink-primary);
+}
+html.theme-dark .bg-white,
+html.theme-dark .bg-white\/92,
+html.theme-dark .bg-white\/95,
+html.theme-dark .bg-white\/90,
+html.theme-dark .AppHeader,
+html.theme-dark .BottomDock > div {
+  background-color: rgba(15, 23, 42, 0.94);
+  color: var(--ink-primary);
+}
+html.theme-dark .bg-slate-50,
+html.theme-dark .bg-slate-50\/80,
+html.theme-dark .bg-slate-100,
+html.theme-dark .bg-slate-100\/90,
+html.theme-dark .bg-slate-100\/80 {
+  background-color: var(--surface-subtle);
+  color: var(--ink-primary);
+}
+html.theme-dark .bg-emerald-50,
+html.theme-dark .bg-emerald-50\/90,
+html.theme-dark .bg-amber-50,
+html.theme-dark .bg-amber-50\/40,
+html.theme-dark .bg-purple-50,
+html.theme-dark .bg-sky-50,
+html.theme-dark .bg-cyan-50,
+html.theme-dark .bg-rose-50,
+html.theme-dark .bg-teal-50 {
+  background-color: rgba(30, 41, 59, 0.85);
+  color: var(--ink-primary);
+}
+html.theme-dark .dashboard-zone-reception {
+  background-color: rgba(14, 116, 144, 0.14);
+  border-color: rgba(56, 189, 248, 0.25);
+}
+html.theme-dark .dashboard-zone-finance {
+  background-color: rgba(6, 95, 70, 0.16);
+  border-color: rgba(52, 211, 153, 0.24);
+}
+html.theme-dark .dashboard-zone-clinical {
+  background-color: rgba(107, 33, 168, 0.15);
+  border-color: rgba(192, 132, 252, 0.24);
+}
+html.theme-dark .dashboard-zone-operations {
+  background-color: rgba(146, 64, 14, 0.15);
+  border-color: rgba(251, 191, 36, 0.24);
+}
+html.theme-dark .from-emerald-50\/90,
+html.theme-dark .from-emerald-50\/95,
+html.theme-dark .from-amber-50\/95,
+html.theme-dark .from-purple-50\/95,
+html.theme-dark .from-sky-50\/95,
+html.theme-dark .from-cyan-50\/95,
+html.theme-dark .from-rose-50\/95 {
+  --tw-gradient-from: rgba(15, 23, 42, 0.98);
+  --tw-gradient-via: rgba(18, 24, 38, 0.98);
+  --tw-gradient-to: rgba(15, 23, 42, 0.96);
+  color: var(--ink-primary);
+}
+html.theme-dark input:not([type="checkbox"]):not([type="radio"]),
+html.theme-dark select,
+html.theme-dark textarea {
+  background-color: #0f172a;
+  color: #f8fafc;
+  border-color: rgba(148, 163, 184, 0.3);
+}
+html.theme-dark input::placeholder,
+html.theme-dark textarea::placeholder {
+  color: #94a3b8;
+}
+html.theme-dark .text-slate-900,
+html.theme-dark .text-slate-950,
 html.theme-dark .text-slate-800 {
-  color: #f1f5f9 !important;
+  color: var(--ink-primary);
 }
-
-html.theme-dark .text-slate-700 {
-  color: #cbd5e1 !important;
+html.theme-dark .text-slate-700,
+html.theme-dark .text-slate-600,
+html.theme-dark .text-slate-500 {
+  color: var(--ink-secondary);
 }
-
-html.theme-dark .border-slate-200 {
-  border-color: rgba(255, 255, 255, 0.1) !important;
-}
-
+html.theme-dark .border-slate-200,
+html.theme-dark .border-slate-200\/70,
+html.theme-dark .border-slate-200\/80,
+html.theme-dark .border-slate-200\/90,
 html.theme-dark .border-slate-100 {
-  border-color: rgba(255, 255, 255, 0.06) !important;
+  border-color: var(--border-hairline);
+}
+html.theme-dark .module-chip-item[aria-selected="false"] {
+  background-color: rgba(30, 41, 59, 0.88);
+  color: #e2e8f0;
+  border-color: rgba(148, 163, 184, 0.28);
+}
+html.theme-dark .module-chip-item[aria-selected="false"]:hover {
+  background-color: rgba(51, 65, 85, 0.92);
+  color: #ffffff;
 }
 
-/* 2. Surgical Anti-Glare High-Contrast Mode */
-html.theme-high-contrast body,
-body.theme-high-contrast {
-  background-color: #000000 !important;
-  color: #ffffff !important;
+[role="tablist"] {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
 }
 
-html.theme-high-contrast * {
-  border-color: #404040 !important;
+html.theme-high-contrast body {
+  background-color: #000000;
+  color: #ffffff;
 }
-
 html.theme-high-contrast .bg-white,
+html.theme-high-contrast .bg-white\/95,
 html.theme-high-contrast .bg-slate-50,
-html.theme-high-contrast .bg-slate-100 {
-  background-color: #0a0a0a !important;
-  color: #ffffff !important;
-  border-width: 2px !important;
-  border-color: #525252 !important;
+html.theme-high-contrast .bg-slate-100,
+html.theme-high-contrast .AppHeader,
+html.theme-high-contrast .BottomDock > div {
+  background-color: #0a0a0a;
+  color: #ffffff;
+  border-color: #737373;
+}
+html.theme-high-contrast .text-slate-900,
+html.theme-high-contrast .text-slate-800,
+html.theme-high-contrast .text-slate-700,
+html.theme-high-contrast .text-slate-600,
+html.theme-high-contrast .text-slate-500,
+html.theme-high-contrast .text-slate-400 {
+  color: #ffffff;
+}
+html.theme-high-contrast input:not([type="checkbox"]):not([type="radio"]),
+html.theme-high-contrast select,
+html.theme-high-contrast textarea {
+  background-color: #000000;
+  color: #ffffff;
+  border-color: #a3a3a3;
+}
+html.theme-high-contrast .border-slate-200,
+html.theme-high-contrast .border-slate-100 {
+  border-color: #737373;
+}
+html.theme-high-contrast .dashboard-zone {
+  background-color: #0a0a0a;
+  border-color: #737373;
+}
+html.theme-high-contrast .module-chip-item[aria-selected="false"] {
+  background-color: #0a0a0a;
+  color: #ffffff;
+  border-color: #a3a3a3;
+}
+html.theme-high-contrast .module-chip-item[aria-selected="true"] {
+  border-color: #c8ff00;
 }
 
-html.theme-high-contrast button {
-  border-width: 2px !important;
-  font-weight: 900 !important;
-}
-
-/* 3. Dynamic Type Scale */
-html.font-scale-large {
-  font-size: 114%;
-}
-
-html.font-scale-xlarge {
-  font-size: 128%;
-}
-
-/* 4. Sterile Glove Touch Friendly Mode */
+/* Sterile Glove Mode: 48x48px Expanded Clinical Hitboxes */
 html.glove-mode button,
 html.glove-mode .tile,
 html.glove-mode [role="button"],
 html.glove-mode input,
 html.glove-mode select {
-  min-height: 48px !important;
-  min-width: 48px !important;
+  min-height: 48px;
+  min-width: 48px;
 }
 
-/* 5. Shimmer animation */
-@keyframes dental-shimmer {
+/* Crisp Hairline & Clinical Daylight Contrast in Light Mode */
+html:not(.theme-dark):not(.theme-high-contrast) .text-slate-400 {
+  color: #475569;
+}
+html:not(.theme-dark):not(.theme-high-contrast) .text-slate-500 {
+  color: #334155;
+}
+
+/* ==========================================================================
+   MOBILE VIEWPORT ERGONOMICS (320px–640px)
+   ========================================================================== */
+@media (max-width: 640px) {
+  /* Prevent iOS Safari auto-zoom on form field focus */
+  input[type="text"],
+  input[type="number"],
+  input[type="tel"],
+  input[type="email"],
+  input[type="password"],
+  input[type="search"],
+  select,
+  textarea {
+    font-size: 16px;
+    line-height: 1.6;
+  }
+
+  .dashboard-view .grid .tile {
+    min-height: 72px;
+    padding: 10px 12px;
+    line-height: 1.6;
+  }
+  .dashboard-view .grid .tile:has(> .tile),
+  .dashboard-view .grid .tile:has(> div > .tile) {
+    padding: 2px;
+  }
+
+  /* BottomDock mobile portrait specification: 48px bar height & flex-grow icons for zero touch overlap */
+  .BottomDock {
+    height: var(--dock-height-mobile);
+    min-height: var(--dock-height-mobile);
+    max-height: var(--dock-height-mobile);
+  }
+
+  .BottomDock > div,
+  .BottomDock .dock-capsule {
+    height: var(--dock-height-mobile);
+    min-height: var(--dock-height-mobile);
+    max-height: var(--dock-height-mobile);
+  }
+
+  .BottomDock .dock-capsule button.ios27-dock-key {
+    flex: 1 1 0%;
+    flex-grow: 1;
+    touch-action: manipulation;
+  }
+
+  .BottomDock button.ios27-dock-key {
+    touch-action: manipulation;
+  }
+
+  .BottomDock button.ios27-dock-key .dock-icon-slot,
+  .BottomDock button.ios27-dock-key svg {
+    flex-grow: 1;
+  }
+}
+
+/* ==========================================================================
+   ACCESSIBILITY: RESPECT OS REDUCED-MOTION PREFERENCE & SKIP NAVIGATION
+   ========================================================================== */
+.skip-to-main {
+  position: fixed;
+  top: 0.75rem;
+  right: 0.75rem;
+  z-index: 9999;
+  padding: 0.625rem 1.125rem;
+  border-radius: 14px;
+  background-color: #0f172a;
+  color: #c8ff00;
+  font-family: var(--font-sans);
+  font-size: 0.8125rem;
+  font-weight: 800;
+  line-height: 1.6;
+  border: 2px solid #c8ff00;
+  box-shadow: 0 10px 25px rgba(15, 23, 42, 0.35);
+  transform: translateY(-200%);
+  transition: transform 0.18s var(--ease-ios);
+  text-decoration: none;
+}
+
+.skip-to-main:focus,
+.skip-to-main:focus-visible {
+  transform: translateY(0);
+  outline: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gemini-blob-1,
+  .gemini-blob-2,
+  .gemini-blob-3,
+  .animate-bell-ring,
+  .dental-shimmer,
+  .animate-view-enter,
+  .ios27-sheet-enter,
+  .palmer-tooth-celebrating,
+  .palmer-confetti-dot,
+  .palmer-check-badge,
+  .dashboard-view .grid .tile {
+    animation: none !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ==========================================================================
+   PALMER TOOTH COMPLETION CELEBRATION (CONFETTI & CHECKMARK)
+   ========================================================================== */
+@keyframes palmer-tooth-pop {
+  0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.65); }
+  30% { transform: scale(1.16); box-shadow: 0 0 0 8px rgba(16, 185, 129, 0.25); }
+  65% { transform: scale(0.98); box-shadow: 0 0 0 12px rgba(16, 185, 129, 0); }
+  100% { transform: scale(1.04); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+}
+
+@keyframes palmer-check-badge-in {
+  0% { opacity: 0; transform: scale(0.2) translateY(6px) rotate(-25deg); }
+  60% { opacity: 1; transform: scale(1.25) translateY(-2px) rotate(6deg); }
+  100% { opacity: 1; transform: scale(1) translateY(0) rotate(0deg); }
+}
+
+@keyframes palmer-confetti-fly {
   0% {
-    background-position: -200% 0;
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(0.5) rotate(0deg);
+  }
+  70% {
+    opacity: 1;
   }
   100% {
-    background-position: 200% 0;
+    opacity: 0;
+    transform: translate(calc(-50% + var(--cx, 0px)), calc(-50% + var(--cy, -26px))) scale(1.1) rotate(var(--cr, 180deg));
   }
 }
 
-.dental-shimmer {
-  background: linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.4) 50%, rgba(255,255,255,0) 100%);
-  background-size: 200% 100%;
-  animation: dental-shimmer 2s infinite;
+.palmer-tooth-celebrating {
+  animation: palmer-tooth-pop 0.7s var(--ease-spring) forwards;
 }
 
-/* 6. Realistic Pendulum Bell Swing Keyframe Animation for Notifications */
-@keyframes real-bell-swing {
-  0% { transform: rotate(0deg); }
-  12% { transform: rotate(20deg); }
-  24% { transform: rotate(-18deg); }
-  36% { transform: rotate(14deg); }
-  48% { transform: rotate(-10deg); }
-  60% { transform: rotate(6deg); }
-  72% { transform: rotate(-3deg); }
-  85% { transform: rotate(0deg); }
-  100% { transform: rotate(0deg); }
+.palmer-check-badge {
+  animation: palmer-check-badge-in 0.42s var(--ease-spring) forwards;
 }
 
-.animate-bell-ring {
-  transform-origin: top center !important;
-  animation: real-bell-swing 2.2s cubic-bezier(0.36, 0.07, 0.19, 0.97) infinite !important;
-  will-change: transform;
+.palmer-confetti-dot {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  pointer-events: none;
+  z-index: 40;
+  animation: palmer-confetti-fly 0.95s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* ==========================================================================
+   CLINICAL PRINT STYLESHEET (INVOICES, LAB SLIPS, PRESCRIPTIONS, BARCODES)
+   ========================================================================== */
+@media print {
+  html,
+  body {
+    background: #ffffff !important;
+    color: #0f172a !important;
+    font-size: 12pt;
+    line-height: 1.6 !important;
+  }
+
+  .AppHeader,
+  .BottomDock,
+  .skip-to-main,
+  .no-print,
+  .gemini-blob-1,
+  .gemini-blob-2,
+  .gemini-blob-3 {
+    display: none !important;
+  }
+
+  main#main-content {
+    padding-bottom: 0 !important;
+  }
+
+  .dashboard-view .grid .tile,
+  .dashboard-zone {
+    box-shadow: none !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    break-inside: avoid;
+  }
+}
+
+/* ==========================================================================
+   MOBILE & TABLET VIRTUAL KEYBOARD & TOUCH POINTER-EVENTS STABILIZATION
+   Prevents iOS Safari / Android WebView keyboard auto-dismissal & touch lock
+   ========================================================================== */
+input,
+textarea,
+select,
+[contenteditable="true"] {
+  user-select: text !important;
+  -webkit-user-select: text !important;
+  pointer-events: auto !important;
+  touch-action: manipulation;
+}
+
+button,
+[role="button"],
+[role="tab"],
+a,
+label {
+  touch-action: manipulation;
+}
+
+.gemini-blob-1,
+.gemini-blob-2,
+.gemini-blob-3 {
+  pointer-events: none !important;
+}
+
+@media (max-width: 1024px) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  textarea,
+  select {
+    font-size: max(16px, 1rem) !important;
+  }
 }
 
 
