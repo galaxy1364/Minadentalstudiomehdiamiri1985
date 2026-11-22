@@ -7,7 +7,8 @@ import {
   TrendingUp, DollarSign, Wallet, RotateCcw,
   SlidersHorizontal, Trash2, X, GripVertical, Fingerprint, CheckCircle2,
   CheckSquare, Square, MoveUp, MoveDown, Archive, Armchair, Printer,
-  ArrowUpDown, Edit3, FolderPlus, Ungroup, Play, RefreshCw, Lock, Plus
+  ArrowUpDown, Edit3, FolderPlus, Ungroup, Play, RefreshCw, Lock, Plus,
+  CalendarPlus, PackagePlus, BellPlus, FilePlus2, ShieldPlus, Receipt, Syringe
 } from 'lucide-react';
 import { Reorder, motion } from 'motion/react';
 import { executeSingleLiveAuditCycle, AuditCycleSummary } from '../../services/liveAuditStressLoop';
@@ -1791,7 +1792,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             badge={tileBadges['implant'] || `${toPersianDigits(activeSurgeriesCount)} فعال`}
             theme="cyan"
             className="tile"
-            quickActionIcon={<Plus className="w-3.5 h-3.5 stroke-[2.6]" />}
+            quickActionIcon={<Syringe className="w-3.5 h-3.5 stroke-[2.4]" />}
             quickActionLabel="ثبت جراحی ایمپلنت جدید"
             onQuickAction={() => {
               recordTileInteraction('implant');
@@ -1831,7 +1832,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             badge={tileBadges['lab'] || `${toPersianDigits(readyLabOrdersCount)} آماده`}
             theme="purple"
             className="tile"
-            quickActionIcon={<Plus className="w-3.5 h-3.5 stroke-[2.6]" />}
+            quickActionIcon={<FlaskConical className="w-3.5 h-3.5 stroke-[2.4]" />}
             quickActionLabel="ثبت سفارش لابراتوار جدید"
             onQuickAction={() => {
               recordTileInteraction('lab');
@@ -1870,7 +1871,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             badge={tileBadges['sayad_checks'] || "۲ در جریان"}
             theme="pink"
             className="tile"
-            quickActionIcon={<Plus className="w-3.5 h-3.5 stroke-[2.6]" />}
+            quickActionIcon={<FilePlus2 className="w-3.5 h-3.5 stroke-[2.4]" />}
             quickActionLabel="ثبت چک صیادی جدید"
             onQuickAction={() => {
               recordTileInteraction('sayad_checks');
@@ -1909,7 +1910,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             badge={tileBadges['installments'] || "وصول به‌موقع"}
             theme="amber"
             className="tile"
-            quickActionIcon={<Plus className="w-3.5 h-3.5 stroke-[2.6]" />}
+            quickActionIcon={<Receipt className="w-3.5 h-3.5 stroke-[2.4]" />}
             quickActionLabel="ثبت قسط و دریافتی سریع"
             onQuickAction={() => {
               recordTileInteraction('installments');
@@ -1988,7 +1989,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             alertDot={lowStockCount > 0}
             theme="emerald"
             className="tile"
-            quickActionIcon={<Plus className="w-3.5 h-3.5 stroke-[2.6]" />}
+            quickActionIcon={<PackagePlus className="w-3.5 h-3.5 stroke-[2.4]" />}
             quickActionLabel="ثبت کالای جدید انبار"
             onQuickAction={() => {
               recordTileInteraction('inventory');
@@ -2036,7 +2037,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             }
             theme="orange"
             className="tile"
-            quickActionIcon={<Plus className="w-3.5 h-3.5 stroke-[2.6]" />}
+            quickActionIcon={<BellPlus className="w-3.5 h-3.5 stroke-[2.4]" />}
             quickActionLabel="ثبت یادآور هوشمند جدید"
             onQuickAction={() => {
               recordTileInteraction('reminders');
@@ -2112,7 +2113,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             badge={tileBadges['marketing'] || "۳ کمپین فعال"}
             theme="rose"
             className="tile"
-            quickActionIcon={<Plus className="w-3.5 h-3.5 stroke-[2.6]" />}
+            quickActionIcon={<Megaphone className="w-3.5 h-3.5 stroke-[2.4]" />}
             quickActionLabel="ایجاد کمپین تبلیغاتی جدید"
             onQuickAction={() => {
               recordTileInteraction('marketing');
@@ -2190,8 +2191,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             badge={tileBadges['appointments'] || `${toPersianDigits(todayAppointmentsCount)} نوبت امروز`}
             theme="lime"
             className="tile"
-            quickActionIcon={<Plus className="w-3.5 h-3.5 stroke-[2.6]" />}
-            quickActionLabel="ثبت نوبت جدید"
+            quickActionIcon={<CalendarPlus className="w-3.5 h-3.5 stroke-[2.4]" />}
+            quickActionLabel="ثبت نوبت سریع"
             onQuickAction={() => {
               recordTileInteraction('appointments');
               onNavigate('appointments');
@@ -2229,7 +2230,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             badge={tileBadges['sterilization'] || "کلاس B تایید ✓"}
             theme="sky"
             className="tile"
-            quickActionIcon={<Plus className="w-3.5 h-3.5 stroke-[2.6]" />}
+            quickActionIcon={<ShieldPlus className="w-3.5 h-3.5 stroke-[2.4]" />}
             quickActionLabel="ثبت سیکل اتوکلاو جدید"
             onQuickAction={() => {
               recordTileInteraction('sterilization');
@@ -2267,7 +2268,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             badge={tileBadges['insurance_claims'] || "تایید آنی"}
             theme="fuchsia"
             className="tile"
-            quickActionIcon={<Plus className="w-3.5 h-3.5 stroke-[2.6]" />}
+            quickActionIcon={<FileCheck2 className="w-3.5 h-3.5 stroke-[2.4]" />}
             quickActionLabel="ثبت خسارت بیمه جدید"
             onQuickAction={() => {
               recordTileInteraction('insurance_claims');

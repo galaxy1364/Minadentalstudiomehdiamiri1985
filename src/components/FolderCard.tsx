@@ -635,10 +635,11 @@ export const FolderCard: React.FC<FolderCardProps> = ({
     Z
   `.trim().replace(/\s+/g, ' ');
 
-  const cardGradStart = brandPurpleSurface ? '#ffffff' : style.gradStart;
-  const cardGradMid = brandPurpleSurface ? '#faf5ff' : style.gradMid;
-  const cardGradEnd = brandPurpleSurface ? '#efe4ff' : style.gradEnd;
-  const cardBorderColor = brandPurpleSurface ? '#dcc8fb' : style.borderColor;
+  const cardGradStart = brandPurpleSurface ? '#faf5ff' : style.gradStart;
+  const cardGradMid = brandPurpleSurface ? '#efe4ff' : style.gradMid;
+  const cardGradEnd = brandPurpleSurface ? '#d8b4fe' : style.gradEnd;
+  const cardBorderColor = brandPurpleSurface ? '#d4b5fc' : style.borderColor;
+  const hasTopRightQuickAction = Boolean(quickActionIcon && onQuickAction && !isBatchEditMode);
 
   return (
     <div
@@ -663,7 +664,7 @@ export const FolderCard: React.FC<FolderCardProps> = ({
         }
         triggerCardActivate();
       }}
-      className={`tile tile-card-typography relative z-10 cursor-pointer group select-none w-full h-full min-w-0 max-w-full min-h-[72px] sm:min-h-[76px] flex flex-col justify-between overflow-hidden rounded-[20px] font-['Vazirmatn',sans-serif] leading-[1.6] shadow-[0_4px_24px_-2px_rgba(15,23,42,0.10),0_4px_10px_-3px_rgba(15,23,42,0.06)] hover:shadow-[0_12px_30px_-4px_rgba(124,58,237,0.20),0_4px_14px_-2px_rgba(168,85,247,0.14)] transition-all duration-200 ease-out ${isPressing ? 'is-pressing' : 'hover:-translate-y-[3px]'} ${isDragHint ? 'is-drag-hint' : ''} ${className}`}
+      className={`tile tile-card-typography relative z-10 cursor-pointer group select-none w-full h-full min-w-0 max-w-full min-h-[72px] sm:min-h-[76px] flex flex-col justify-between overflow-hidden rounded-[20px] font-['Vazirmatn',sans-serif] leading-[1.6] shadow-[0_4px_20px_-4px_rgba(109,40,217,0.14),0_2px_8px_-2px_rgba(139,92,246,0.10)] hover:shadow-[0_16px_34px_-8px_rgba(124,58,237,0.26),0_8px_18px_-6px_rgba(168,85,247,0.18)] transition-all duration-300 ease-out ${isPressing ? 'is-pressing tile-physical-active' : 'hover:-translate-y-[3px] hover:scale-[1.02]'} ${isDragHint ? 'is-drag-hint' : ''} ${className}`}
     >
       {/* Passive pointer-events wrapper around .tile */}
       <div 
@@ -671,9 +672,9 @@ export const FolderCard: React.FC<FolderCardProps> = ({
         aria-hidden="true" 
       />
 
-      {/* High-Precision Q-Bank Vector Chassis */}
+      {/* High-Precision Q-Bank Vector Chassis with Modern Purple Gradient & Smooth Hover Cross-Fade */}
       <svg
-        className="absolute inset-0 w-full h-full pointer-events-none z-0 transition-transform duration-200"
+        className="absolute inset-0 w-full h-full pointer-events-none z-0 transition-transform duration-300"
         viewBox={`0 0 ${W} ${H}`}
         fill="none"
         xmlns="http://www.w3.org/2000/svg"
@@ -681,9 +682,16 @@ export const FolderCard: React.FC<FolderCardProps> = ({
         <defs>
           <linearGradient id={`grad_${uniqueId}`} x1="0" y1="0" x2={W} y2={H} gradientUnits="userSpaceOnUse">
             <stop offset="0%" stopColor={cardGradStart} />
-            <stop offset="52%" stopColor={cardGradMid} />
+            <stop offset="48%" stopColor={cardGradMid} />
             <stop offset="100%" stopColor={cardGradEnd} />
           </linearGradient>
+          {brandPurpleSurface && (
+            <linearGradient id={`grad_hover_${uniqueId}`} x1="0" y1="0" x2={W} y2={H} gradientUnits="userSpaceOnUse">
+              <stop offset="0%" stopColor="#f5eeff" />
+              <stop offset="46%" stopColor="#e9d5ff" />
+              <stop offset="100%" stopColor="#c4b5fd" />
+            </linearGradient>
+          )}
         </defs>
         <path
           d={svgPath}
@@ -693,7 +701,41 @@ export const FolderCard: React.FC<FolderCardProps> = ({
           vectorEffect="non-scaling-stroke"
           className="transition-all duration-300"
         />
+        {brandPurpleSurface && (
+          <path
+            d={svgPath}
+            fill={`url(#grad_hover_${uniqueId})`}
+            stroke="#c084fc"
+            strokeWidth="1.25"
+            vectorEffect="non-scaling-stroke"
+            className="opacity-0 group-hover:opacity-100 transition-opacity duration-300 ease-out"
+          />
+        )}
       </svg>
+
+      {/* Top-Right Corner Quick-Action Icon Button (Tailwind corner placement, zero overlap with 3D logo) */}
+      {hasTopRightQuickAction && (
+        <div className="absolute top-2 right-2 z-25 pointer-events-auto">
+          <FramerTooltip content={quickActionLabel || `عملیات سریع ${title}`} position="top">
+            <button
+              type="button"
+              onPointerDown={(e) => {
+                e.stopPropagation();
+              }}
+              onClick={(e) => {
+                e.stopPropagation();
+                impactMedium();
+                onQuickAction?.();
+              }}
+              aria-label={quickActionLabel || `عملیات سریع ${title}`}
+              title={quickActionLabel || `عملیات سریع ${title}`}
+              className="tile-quick-action-btn w-6 h-6 sm:w-7 sm:h-7 rounded-[9px] bg-white/90 backdrop-blur-xs hover:bg-gradient-to-br hover:from-purple-600 hover:via-violet-600 hover:to-fuchsia-600 text-purple-700 hover:text-white border border-purple-300/80 hover:border-purple-500 shadow-[0_2px_6px_rgba(124,58,237,0.16)] hover:shadow-[0_4px_12px_rgba(124,58,237,0.34)] flex items-center justify-center transition-all duration-200 ease-out hover:scale-105 active:scale-95 active:translate-y-[1px] cursor-pointer"
+            >
+              {quickActionIcon}
+            </button>
+          </FramerTooltip>
+        </div>
+      )}
 
       {/* Contextual Floating Overlay on Long-Press */}
       {showLongPressOverlay && (
@@ -812,8 +854,8 @@ export const FolderCard: React.FC<FolderCardProps> = ({
           />
         )}
 
-        {/* Top Row: Frameless 3D Icon (Right) & Status Pill + Corner Quick Action Button (Left) */}
-        <div className="flex items-center justify-between gap-1.5 w-full min-w-0">
+        {/* Top Row: Unobstructed 3D Icon (Right, offset cleanly past top-right quick-action corner button) & Status Pill (Left) */}
+        <div className={`flex items-center justify-between gap-1.5 w-full min-w-0 ${hasTopRightQuickAction ? 'pr-6 sm:pr-7' : ''}`}>
           {/* 3D Icon Box — Volumetric Sculpted 3D Logo, Unobstructed, Zero Overlapping Badges */}
           <div 
             className="tile-icon-box shrink-0 relative w-9 h-9 sm:w-11 sm:h-11 flex items-center justify-center group-hover:scale-110 group-hover:-translate-y-0.5 transition-all duration-200 [&_svg]:w-8 [&_svg]:h-8 sm:[&_svg]:w-10 sm:[&_svg]:h-10 [&_svg]:drop-shadow-[0_3px_5px_rgba(15,23,42,0.16)]"
@@ -821,8 +863,8 @@ export const FolderCard: React.FC<FolderCardProps> = ({
             {icon}
           </div>
 
-          {/* Top-Left Status Badge & Corner Quick-Action Icon Button (Clean, Non-Overlapping) */}
-          <div className="flex items-center gap-1 min-w-0 max-w-[78%] justify-end">
+          {/* Top-Left Status Badge & Extra Action (Clean, Non-Overlapping) */}
+          <div className="flex items-center gap-1 min-w-0 max-w-[74%] justify-end">
             {isBatchEditMode ? (
               <div
                 className="pointer-events-auto z-20 flex items-center min-w-0"
@@ -858,27 +900,6 @@ export const FolderCard: React.FC<FolderCardProps> = ({
                 <span className="leading-[1.6] font-bold truncate" style={{ color: badgeContrast.textColor, textShadow: badgeContrast.textShadowStyle }}>{badgeValue || badge}</span>
               </span>
             ) : null}
-
-            {quickActionIcon && onQuickAction && !isBatchEditMode && (
-              <FramerTooltip content={quickActionLabel || `عملیات سریع ${title}`} position="top">
-                <button
-                  type="button"
-                  onPointerDown={(e) => {
-                    e.stopPropagation();
-                  }}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    impactMedium();
-                    onQuickAction();
-                  }}
-                  aria-label={quickActionLabel || `عملیات سریع ${title}`}
-                  title={quickActionLabel || `عملیات سریع ${title}`}
-                  className="tile-quick-action-btn shrink-0 w-7 h-7 sm:w-7.5 sm:h-7.5 rounded-[10px] bg-gradient-to-br from-white via-purple-50 to-violet-100 hover:from-purple-600 hover:via-violet-600 hover:to-fuchsia-600 text-purple-700 hover:text-white border border-purple-200/90 hover:border-purple-500 shadow-[0_2px_6px_rgba(124,58,237,0.14)] hover:shadow-[0_4px_12px_rgba(124,58,237,0.32)] flex items-center justify-center transition-all duration-200 ease-out hover:scale-105 active:scale-90 active:translate-y-[1px] cursor-pointer pointer-events-auto z-20"
-                >
-                  {quickActionIcon}
-                </button>
-              </FramerTooltip>
-            )}
 
             {extraAction && (
               <div

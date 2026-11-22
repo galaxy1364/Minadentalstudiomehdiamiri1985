@@ -422,7 +422,7 @@ html.theme-high-contrast {
   }
 }
 
-/* iOS 27 Tactile Mechanical Key Tile with Brand-Purple Soft Gradient, >=48px Touch Area & Vazirmatn 1.6 Typography */
+/* iOS 27 Tactile Mechanical Key Tile with Modern Purple Gradient, >=48px Touch Area & Vazirmatn 1.6 Typography */
 .dashboard-view .grid .tile {
   --tile-index: 0;
   --stagger-delay: calc(var(--stagger-base, 30ms) + (var(--tile-index, 0) * var(--stagger-step, 42ms)));
@@ -443,11 +443,11 @@ html.theme-high-contrast {
   position: relative;
   box-sizing: border-box;
   border-radius: var(--radius-card);
-  background: linear-gradient(138deg, #ffffff 0%, #faf5ff 52%, #efe4ff 100%);
+  background: linear-gradient(135deg, #faf5ff 0%, #efe4ff 42%, #e4ccff 76%, #d8b4fe 100%);
   font-family: 'Vazirmatn', var(--font-sans);
   line-height: 1.6;
-  box-shadow: 0 4px 24px -2px rgba(109, 40, 217, 0.12), 0 2px 8px -2px rgba(139, 92, 246, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.92);
-  filter: drop-shadow(0 4px 16px rgba(109, 40, 217, 0.07));
+  box-shadow: 0 4px 24px -2px rgba(109, 40, 217, 0.14), 0 2px 8px -2px rgba(139, 92, 246, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  filter: drop-shadow(0 4px 14px rgba(109, 40, 217, 0.08));
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
   user-select: none;
@@ -456,10 +456,10 @@ html.theme-high-contrast {
   animation: tile-stagger-fade-in 0.45s cubic-bezier(0.22, 1, 0.36, 1) backwards;
   animation-delay: var(--stagger-delay, 30ms);
   transition:
-    transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1),
-    box-shadow 0.26s cubic-bezier(0.22, 1, 0.36, 1),
-    background 0.28s ease,
-    filter 0.24s var(--ease-out-expo);
+    transform 0.28s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.28s cubic-bezier(0.22, 1, 0.36, 1),
+    background 0.32s ease,
+    filter 0.28s ease;
 }
 
 /* Outer drag/reorder wrapper around FolderCard keeps a crisp 2px touch gutter while inner .tile renders the Q-Bank card */
@@ -508,31 +508,33 @@ html.theme-high-contrast {
 @keyframes tile-hover-depth {
   0% {
     transform: translateY(0) scale(1);
-    box-shadow: 0 4px 24px -2px rgba(109, 40, 217, 0.12), 0 2px 8px -2px rgba(139, 92, 246, 0.08);
+    box-shadow:
+      0 4px 20px -4px rgba(109, 40, 217, 0.14),
+      0 2px 8px -2px rgba(139, 92, 246, 0.1);
   }
-  58% {
-    transform: translateY(-4.5px) scale(1.014);
+  65% {
+    transform: translateY(-3.5px) scale(1.022);
   }
   100% {
-    transform: translateY(-3.5px) scale(1.01);
+    transform: translateY(-3px) scale(1.02);
     box-shadow:
-      0 14px 32px -6px rgba(124, 58, 237, 0.24),
-      0 6px 16px -4px rgba(168, 85, 247, 0.16),
-      0 0 0 1.5px rgba(168, 85, 247, 0.32),
-      inset 0 1px 0 rgba(255, 255, 255, 0.98);
+      0 16px 34px -8px rgba(124, 58, 237, 0.26),
+      0 8px 18px -6px rgba(168, 85, 247, 0.18),
+      0 0 0 1.5px rgba(168, 85, 247, 0.38),
+      inset 0 1px 0 rgba(255, 255, 255, 0.94);
   }
 }
 
 .dashboard-view .grid .tile:hover {
-  transform: translateY(-3.5px) scale(1.01);
-  background: linear-gradient(138deg, #ffffff 0%, #f5edff 48%, #e9d5ff 100%);
+  transform: translateY(-3px) scale(1.02);
+  background: linear-gradient(135deg, #f5eeff 0%, #e9d5ff 46%, #d8b4fe 100%);
   box-shadow:
-    0 14px 32px -6px rgba(124, 58, 237, 0.24),
-    0 6px 16px -4px rgba(168, 85, 247, 0.16),
-    0 0 0 1.5px rgba(168, 85, 247, 0.32),
-    inset 0 1px 0 rgba(255, 255, 255, 0.98);
-  filter: drop-shadow(0 10px 24px rgba(124, 58, 237, 0.16));
-  animation: tile-hover-depth 0.26s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+    0 16px 34px -8px rgba(124, 58, 237, 0.26),
+    0 8px 18px -6px rgba(168, 85, 247, 0.18),
+    0 0 0 1.5px rgba(168, 85, 247, 0.38),
+    inset 0 1px 0 rgba(255, 255, 255, 0.94);
+  filter: drop-shadow(0 12px 26px rgba(124, 58, 237, 0.18));
+  animation: tile-hover-depth 0.28s cubic-bezier(0.22, 1, 0.36, 1) forwards;
   z-index: 22;
 }
 
@@ -647,49 +649,57 @@ html.theme-high-contrast {
   transition-delay: var(--action-delay, 94ms);
 }
 
-/* Tactile Physical Mechanical Button-Press Animation (Active State) */
+/* Tactile Physical Click Effect Animation (Active State — exact scale 0.98 + depth shadow) */
 @keyframes tile-physical-press {
   0% {
-    transform: translateY(-2px) scale(1.004);
+    transform: translateY(-2px) scale(1.01);
     box-shadow:
-      0 10px 24px -4px rgba(124, 58, 237, 0.2),
-      0 4px 12px -2px rgba(168, 85, 247, 0.12);
+      0 12px 26px -6px rgba(124, 58, 237, 0.22),
+      0 4px 12px -3px rgba(168, 85, 247, 0.14);
     filter: brightness(1);
   }
-  48% {
-    transform: translateY(4px) scale(0.955);
+  55% {
+    transform: translateY(2.5px) scale(0.98);
     box-shadow:
-      0 1px 2px rgba(88, 28, 135, 0.16),
-      inset 0 3px 8px rgba(88, 28, 135, 0.2),
-      inset 0 1px 2px rgba(15, 23, 42, 0.12);
-    filter: brightness(0.965);
+      0 1px 3px rgba(88, 28, 135, 0.18),
+      0 0 0 1px rgba(124, 58, 237, 0.24),
+      inset 0 3px 7px rgba(88, 28, 135, 0.22),
+      inset 0 1px 2px rgba(15, 23, 42, 0.1);
+    filter: brightness(0.97);
   }
   100% {
-    transform: translateY(3px) scale(0.964);
+    transform: translateY(2px) scale(0.98);
     box-shadow:
-      0 2px 5px rgba(88, 28, 135, 0.14),
-      inset 0 2px 6px rgba(88, 28, 135, 0.16),
-      inset 0 1px 2px rgba(15, 23, 42, 0.1);
-    filter: brightness(0.975);
+      0 2px 5px rgba(88, 28, 135, 0.16),
+      0 0 0 1px rgba(124, 58, 237, 0.22),
+      inset 0 2px 6px rgba(88, 28, 135, 0.18),
+      inset 0 1px 2px rgba(15, 23, 42, 0.08);
+    filter: brightness(0.98);
   }
 }
 
+/* Dedicated Physical Click Active CSS Class */
+.tile-physical-active,
 .dashboard-view .grid .tile:active,
-.dashboard-view .grid .tile.is-pressing {
-  animation: tile-physical-press 0.15s cubic-bezier(0.22, 1, 0.36, 1) forwards;
-  transform: translateY(3px) scale(0.964);
+.dashboard-view .grid .tile.is-pressing,
+.dashboard-view .grid .tile.tile-physical-active {
+  animation: tile-physical-press 0.14s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  transform: translateY(2px) scale(0.98);
   box-shadow:
-    0 2px 5px rgba(88, 28, 135, 0.14),
-    inset 0 2px 6px rgba(88, 28, 135, 0.16),
-    inset 0 1px 2px rgba(15, 23, 42, 0.1);
+    0 2px 5px rgba(88, 28, 135, 0.16),
+    0 0 0 1px rgba(124, 58, 237, 0.22),
+    inset 0 2px 6px rgba(88, 28, 135, 0.18),
+    inset 0 1px 2px rgba(15, 23, 42, 0.08);
   transition:
-    transform 0.08s cubic-bezier(0.2, 0.9, 0.3, 1),
-    box-shadow 0.08s ease-out,
-    filter 0.08s ease-out;
+    transform 0.1s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.1s ease-out,
+    filter 0.1s ease-out;
 }
 
 .dashboard-view .grid .tile:has(> .tile):active,
-.dashboard-view .grid .tile:has(> div > .tile):active {
+.dashboard-view .grid .tile:has(> div > .tile):active,
+.dashboard-view .grid .tile:has(> .tile).tile-physical-active,
+.dashboard-view .grid .tile:has(> div > .tile).tile-physical-active {
   animation: none;
   transform: none;
   box-shadow: none;
@@ -697,18 +707,20 @@ html.theme-high-contrast {
 }
 
 .dashboard-view .grid .tile:active .tile-action-button,
-.dashboard-view .grid .tile.is-pressing .tile-action-button {
-  transform: translateY(2.5px) scale(0.9);
+.dashboard-view .grid .tile.is-pressing .tile-action-button,
+.dashboard-view .grid .tile.tile-physical-active .tile-action-button {
+  transform: translateY(2px) scale(0.92);
   box-shadow: inset 0 2px 4px rgba(88, 28, 135, 0.2);
 }
 
 .dashboard-view .grid .tile:hover .tile-icon-box {
-  transform: scale(1.09) translateY(-2px);
+  transform: scale(1.08) translateY(-2px);
 }
 
 .dashboard-view .grid .tile:active .tile-icon-box,
-.dashboard-view .grid .tile.is-pressing .tile-icon-box {
-  transform: scale(0.93) translateY(2px);
+.dashboard-view .grid .tile.is-pressing .tile-icon-box,
+.dashboard-view .grid .tile.tile-physical-active .tile-icon-box {
+  transform: scale(0.96) translateY(1.5px);
 }
 
 @keyframes tile-drag-hint {
