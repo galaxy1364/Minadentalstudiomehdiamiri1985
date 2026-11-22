@@ -384,7 +384,7 @@ export const GoogleDriveBackupPanel: React.FC<GoogleDriveBackupPanelProps> = ({
               onClick={() => void handleUploadNow()}
               className="flex-1 py-2.5 px-3 rounded-xl bg-sky-600 hover:bg-sky-700 text-white font-black text-xs shadow-xs active:scale-95 transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-60"
             >
-              <CloudUpload className={`w-4 h-4 ${isUploading ? 'animate-bounce' : ''}`} />
+              <CloudUpload className={`w-4 h-4 ${isUploading ? 'animate-pulse' : ''}`} />
               <span>{isUploading ? 'در حال آپلود به گوگل درایو...' : 'آپلود فوری بکاپ به گوگل درایو'}</span>
             </button>
 

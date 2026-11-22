@@ -22,6 +22,7 @@ import { isCloudSqlConfigured } from './src/db/index.ts';
 import { getOrCreateUser } from './src/db/users.ts';
 import {
   appendAuditLogInSql,
+  buildUserWorkspaceKey,
   createBackupInSql,
   getBackupSnapshotFromSql,
   listAuditLogsInSql,
@@ -913,8 +914,11 @@ export async function createMinaDentalServer(options: CreateServerOptions = {}) 
       });
     }
 
-    const backupsDir = getBackupsDir(storeFilePath);
-    const snapshotPath = path.join(backupsDir, `${parsed.data.snapshotId}.json`);
+    const backupsDir = path.resolve(getBackupsDir(storeFilePath));
+    const snapshotPath = path.resolve(backupsDir, `${parsed.data.snapshotId}.json`);
+    if (!snapshotPath.startsWith(backupsDir + path.sep)) {
+      return res.status(400).json({ error: 'مسیر فایل پشتیبان غیرمجاز است.' });
+    }
     if (!fs.existsSync(snapshotPath)) {
       return res.status(404).json({ error: 'فایل پشتیبان انتخاب‌شده روی سرور یافت نشد.' });
     }
@@ -988,7 +992,11 @@ export async function createMinaDentalServer(options: CreateServerOptions = {}) 
     if (!SAFE_BACKUP_SNAPSHOT_ID_REGEX.test(id)) {
       return res.status(400).json({ error: 'شناسه فایل پشتیبان نامعتبر است.' });
     }
-    const snapshotPath = path.join(getBackupsDir(storeFilePath), `${id}.json`);
+    const backupsDir = path.resolve(getBackupsDir(storeFilePath));
+    const snapshotPath = path.resolve(backupsDir, `${id}.json`);
+    if (!snapshotPath.startsWith(backupsDir + path.sep)) {
+      return res.status(400).json({ error: 'مسیر فایل پشتیبان غیرمجاز است.' });
+    }
     if (!fs.existsSync(snapshotPath)) {
       return res.status(404).json({ error: 'فایل پشتیبان یافت نشد.' });
     }
@@ -1161,8 +1169,15 @@ export async function createMinaDentalServer(options: CreateServerOptions = {}) 
       throw new Error('Unauthorized: Missing user identity');
     }
     const dbUser = await getOrCreateUser(uid, email, req.user?.name || null);
-    const loaded = await loadClinicStoreFromSql(dbUser.id);
-    return { dbUser, workspaceId: loaded.workspaceId, store: loaded.store };
+    const workspaceKey = buildUserWorkspaceKey(uid);
+    const loaded = await loadClinicStoreFromSql(dbUser.id, workspaceKey);
+    return {
+      dbUser,
+      workspaceId: loaded.workspaceId,
+      ownerUserId: loaded.ownerUserId,
+      isServerVerifiedAdmin: dbUser.role === 'admin' && loaded.ownerUserId === dbUser.id,
+      store: loaded.store,
+    };
   };
 
   app.get('/api/sql/clinic/state', requireAuth, async (req: AuthRequest, res) => {
@@ -1274,9 +1289,6 @@ export async function createMinaDentalServer(options: CreateServerOptions = {}) 
 
       await saveClinicStoreToSql(workspaceId, nextStore);
 
-      // Keep local SSE memory cache aligned for multi-device broadcast
-      clinicStore = nextStore;
-
       if (nextStore.revision === 1 || nextStore.revision % 10 === 0) {
         try {
           await createBackupInSql(
@@ -1360,14 +1372,14 @@ export async function createMinaDentalServer(options: CreateServerOptions = {}) 
       });
     }
     const { clientId, actorName, isManager, mode, preserveInventory, inventory } = parsed.data;
-    if (!isManager) {
-      return res.status(403).json({
-        error: '⛔ تغییر حالت کلینیک و پاک‌سازی داده‌های نمایشی فقط برای مدیر کلینیک مجاز است.',
-      });
-    }
 
     try {
-      const { workspaceId, store: currentSqlStore } = await resolveSqlContext(req);
+      const { workspaceId, isServerVerifiedAdmin, store: currentSqlStore } = await resolveSqlContext(req);
+      if (!isServerVerifiedAdmin || !isManager) {
+        return res.status(403).json({
+          error: '⛔ تغییر حالت کلینیک و پاک‌سازی داده‌های نمایشی فقط برای مدیر کلینیک مجاز است.',
+        });
+      }
       if (currentSqlStore.initialized) {
         try {
           await createBackupInSql(
@@ -1401,7 +1413,6 @@ export async function createMinaDentalServer(options: CreateServerOptions = {}) 
       };
 
       await saveClinicStoreToSql(workspaceId, nextStore);
-      clinicStore = nextStore;
 
       try {
         await appendAuditLogInSql(workspaceId, {
@@ -1508,16 +1519,16 @@ export async function createMinaDentalServer(options: CreateServerOptions = {}) 
       });
     }
     const { snapshotId, actorName, isManager, clientId } = parsed.data;
-    if (!isManager) {
-      return res.status(403).json({
-        error: '⛔ بازیابی نسخه پشتیبان فقط توسط مدیر کلینیک مجاز است.',
-      });
-    }
     if (!SAFE_BACKUP_SNAPSHOT_ID_REGEX.test(snapshotId)) {
       return res.status(400).json({ error: 'شناسه فایل پشتیبان غیرمجاز است.' });
     }
     try {
-      const { workspaceId, store: currentSqlStore } = await resolveSqlContext(req);
+      const { workspaceId, isServerVerifiedAdmin, store: currentSqlStore } = await resolveSqlContext(req);
+      if (!isServerVerifiedAdmin || !isManager) {
+        return res.status(403).json({
+          error: '⛔ بازیابی نسخه پشتیبان فقط توسط مدیر کلینیک مجاز است.',
+        });
+      }
       const snapshot = await getBackupSnapshotFromSql(workspaceId, snapshotId);
       if (!snapshot) {
         return res.status(404).json({ error: 'نسخه پشتیبان انتخاب‌شده یافت نشد.' });
@@ -1540,7 +1551,6 @@ export async function createMinaDentalServer(options: CreateServerOptions = {}) 
         updatedBy: actorName || req.user?.email || 'مدیر کلینیک',
       };
       await saveClinicStoreToSql(workspaceId, nextStore);
-      clinicStore = nextStore;
 
       try {
         await appendAuditLogInSql(workspaceId, {

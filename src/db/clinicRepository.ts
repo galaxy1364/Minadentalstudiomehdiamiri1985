@@ -47,11 +47,13 @@ export interface SqlAuditEntry {
   severity: string;
 }
 
-const DEFAULT_WORKSPACE_KEY = 'minadental_primary_clinic';
+export function buildUserWorkspaceKey(ownerUid: string): string {
+  return `clinic_${ownerUid}`;
+}
 
 export async function getOrCreateClinicWorkspace(
   ownerUserId: number,
-  workspaceKey: string = DEFAULT_WORKSPACE_KEY
+  workspaceKey: string
 ) {
   try {
     const inserted = await db
@@ -75,11 +77,16 @@ export async function getOrCreateClinicWorkspace(
     const existing = await db
       .select()
       .from(clinicWorkspaces)
-      .where(eq(clinicWorkspaces.workspaceKey, workspaceKey))
+      .where(
+        and(
+          eq(clinicWorkspaces.workspaceKey, workspaceKey),
+          eq(clinicWorkspaces.ownerUserId, ownerUserId)
+        )
+      )
       .limit(1);
 
     if (!existing[0]) {
-      throw new Error('Clinic workspace could not be initialized.');
+      throw new Error('Unauthorized workspace access or workspace not found.');
     }
     return existing[0];
   } catch (error) {
@@ -92,8 +99,8 @@ export async function getOrCreateClinicWorkspace(
 
 export async function loadClinicStoreFromSql(
   ownerUserId: number,
-  workspaceKey: string = DEFAULT_WORKSPACE_KEY
-): Promise<{ workspaceId: number; store: SqlClinicStoreSnapshot }> {
+  workspaceKey: string
+): Promise<{ workspaceId: number; ownerUserId: number; store: SqlClinicStoreSnapshot }> {
   try {
     const workspace = await getOrCreateClinicWorkspace(ownerUserId, workspaceKey);
     const [patientRows, appointmentRows, inventoryRows] = await Promise.all([
@@ -113,6 +120,7 @@ export async function loadClinicStoreFromSql(
 
     return {
       workspaceId: workspace.id,
+      ownerUserId: workspace.ownerUserId,
       store: {
         initialized: workspace.initialized === 1,
         revision: workspace.revision,
@@ -160,19 +168,20 @@ export async function saveClinicStoreToSql(
         })
         .where(eq(clinicWorkspaces.id, workspaceId));
 
-      // Upsert patients & remove deleted rows
+      // Upsert patients scoped to workspaceId & remove deleted rows
       const patientIds: string[] = [];
       for (const p of store.patients) {
-        const id = typeof p.id === 'string' ? p.id : '';
-        if (!id) continue;
-        patientIds.push(id);
+        const rawId = typeof p.id === 'string' ? p.id : '';
+        if (!rawId) continue;
+        const scopedId = rawId.startsWith(`ws${workspaceId}:`) ? rawId : `ws${workspaceId}:${rawId}`;
+        patientIds.push(scopedId);
         const totalCost = Math.round(Number(p.totalCost) || 0);
         const paidAmount = Math.round(Number(p.paidAmount) || 0);
         const balance = paidAmount - totalCost;
         await tx
           .insert(clinicPatients)
           .values({
-            id,
+            id: scopedId,
             workspaceId,
             fileNumber: typeof p.fileNumber === 'string' ? p.fileNumber : '',
             fullName: typeof p.fullName === 'string' ? p.fullName : '',
@@ -212,16 +221,17 @@ export async function saveClinicStoreToSql(
           );
       }
 
-      // Upsert appointments & remove deleted rows
+      // Upsert appointments scoped to workspaceId & remove deleted rows
       const appointmentIds: string[] = [];
       for (const a of store.appointments) {
-        const id = typeof a.id === 'string' ? a.id : '';
-        if (!id) continue;
-        appointmentIds.push(id);
+        const rawId = typeof a.id === 'string' ? a.id : '';
+        if (!rawId) continue;
+        const scopedId = rawId.startsWith(`ws${workspaceId}:`) ? rawId : `ws${workspaceId}:${rawId}`;
+        appointmentIds.push(scopedId);
         await tx
           .insert(clinicAppointments)
           .values({
-            id,
+            id: scopedId,
             workspaceId,
             patientId: typeof a.patientId === 'string' ? a.patientId : '',
             date: typeof a.date === 'string' ? a.date : '',
@@ -257,16 +267,17 @@ export async function saveClinicStoreToSql(
           );
       }
 
-      // Upsert inventory & remove deleted rows
+      // Upsert inventory scoped to workspaceId & remove deleted rows
       const inventoryIds: string[] = [];
       for (const item of store.inventory) {
-        const id = typeof item.id === 'string' ? item.id : '';
-        if (!id) continue;
-        inventoryIds.push(id);
+        const rawId = typeof item.id === 'string' ? item.id : '';
+        if (!rawId) continue;
+        const scopedId = rawId.startsWith(`ws${workspaceId}:`) ? rawId : `ws${workspaceId}:${rawId}`;
+        inventoryIds.push(scopedId);
         await tx
           .insert(clinicInventory)
           .values({
-            id,
+            id: scopedId,
             workspaceId,
             name: typeof item.name === 'string' ? item.name : '',
             stock: Math.round(Number(item.stock) || 0),
@@ -334,7 +345,6 @@ export async function createBackupInSql(
       })
       .returning();
 
-    // Rotate oldest backups beyond 30 rolling snapshots
     const allRows = await db
       .select({ id: clinicBackups.id })
       .from(clinicBackups)
