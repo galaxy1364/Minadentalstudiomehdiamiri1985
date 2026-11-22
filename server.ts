@@ -1,8 +1,10 @@
 import 'dotenv/config';
 import express from 'express';
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { z } from 'zod';
 import { GoogleGenAI } from '@google/genai';
 import {
   aiConsultRequestSchema,
@@ -22,13 +24,16 @@ import { isCloudSqlConfigured } from './src/db/index.ts';
 import { getOrCreateUser } from './src/db/users.ts';
 import {
   appendAuditLogInSql,
-  buildUserWorkspaceKey,
   createBackupInSql,
+  enforceServerPriceAndRoleGuard,
   getBackupSnapshotFromSql,
   listAuditLogsInSql,
   listBackupsInSql,
-  loadClinicStoreFromSql,
+  listClinicMembersInSql,
+  removeClinicMemberInSql,
+  resolveUserClinicWorkspace,
   saveClinicStoreToSql,
+  upsertClinicMemberInSql,
 } from './src/db/clinicRepository.ts';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -471,7 +476,26 @@ interface SseClient {
   id: string;
   res: express.Response;
   connectedAt: number;
+  workspaceScope: string;
 }
+
+interface SseStreamTicket {
+  workspaceId: number;
+  uid: string;
+  role: string;
+  expiresAt: number;
+}
+
+const clinicMemberUpsertSchema = z.object({
+  email: z
+    .string()
+    .trim()
+    .email('آدرس ایمیل معتبر وارد کنید.')
+    .max(160),
+  displayName: z.string().trim().min(1, 'نام پرسنل الزامی است.').max(100),
+  role: z.enum(['manager', 'doctor', 'secretary', 'assistant']),
+  canEditPrices: z.boolean().optional(),
+});
 
 export interface CreateServerOptions {
   dataFilePath?: string;
@@ -488,7 +512,25 @@ export async function createMinaDentalServer(options: CreateServerOptions = {}) 
   let clinicStore: PersistedClinicStore = loadStoreFromDisk(storeFilePath);
   let auditLogEntries: ServerAuditLogEntry[] = loadAuditLogFromDisk(auditFilePath);
   const sseClients = new Map<string, SseClient>();
+  const sseStreamTickets = new Map<string, SseStreamTicket>();
   const MAX_SSE_CLIENTS = 100;
+
+  const pruneExpiredSseTickets = () => {
+    const now = Date.now();
+    for (const [token, ticket] of sseStreamTickets.entries()) {
+      if (ticket.expiresAt <= now) {
+        sseStreamTickets.delete(token);
+      }
+    }
+  };
+
+  const countSseClientsInScope = (workspaceScope: string): number => {
+    let count = 0;
+    for (const client of sseClients.values()) {
+      if (client.workspaceScope === workspaceScope) count++;
+    }
+    return count;
+  };
 
   const recordServerAudit = (entry: Omit<ServerAuditLogEntry, 'id' | 'timestamp'>): ServerAuditLogEntry => {
     const fullEntry: ServerAuditLogEntry = {
@@ -505,9 +547,15 @@ export async function createMinaDentalServer(options: CreateServerOptions = {}) 
     return fullEntry;
   };
 
-  const broadcastSse = (eventName: string, payload: Record<string, unknown>, excludeClientId?: string) => {
+  const broadcastSse = (
+    eventName: string,
+    payload: Record<string, unknown>,
+    excludeClientId?: string,
+    workspaceScope: string = 'local'
+  ) => {
     const serialized = `event: ${eventName}\ndata: ${JSON.stringify(payload)}\n\n`;
     for (const [cid, client] of sseClients.entries()) {
+      if (client.workspaceScope !== workspaceScope) continue;
       if (excludeClientId && cid === excludeClientId) continue;
       try {
         client.res.write(serialized);
@@ -527,6 +575,7 @@ export async function createMinaDentalServer(options: CreateServerOptions = {}) 
 
   // Dedicated 10mb JSON parser for clinic sync routes; 1mb default everywhere else
   app.use('/api/clinic', express.json({ limit: '10mb' }));
+  app.use('/api/sql/clinic', express.json({ limit: '10mb' }));
   app.use(express.json({ limit: '1mb' }));
 
   // Health & ECC readiness endpoint
@@ -580,24 +629,31 @@ export async function createMinaDentalServer(options: CreateServerOptions = {}) 
     res.setHeader('X-Accel-Buffering', 'no');
     res.flushHeaders?.();
 
-    sseClients.set(clientId, { id: clientId, res, connectedAt: Date.now() });
+    sseClients.set(clientId, {
+      id: clientId,
+      res,
+      connectedAt: Date.now(),
+      workspaceScope: 'local',
+    });
 
+    const localConnected = countSseClientsInScope('local');
     const welcomePayload = {
       type: 'connected',
       clientId,
       initialized: clinicStore.initialized,
       revision: clinicStore.revision,
       mode: clinicStore.mode,
-      connectedClients: sseClients.size,
+      connectedClients: localConnected,
       updatedAt: clinicStore.updatedAt,
     };
     res.write(`event: connected\ndata: ${JSON.stringify(welcomePayload)}\n\n`);
 
-    // Notify other devices of updated active device presence count
+    // Notify other local-scope devices of updated active device presence count
     broadcastSse(
       'presence',
-      { connectedClients: sseClients.size, revision: clinicStore.revision },
-      clientId
+      { connectedClients: localConnected, revision: clinicStore.revision },
+      clientId,
+      'local'
     );
 
     const heartbeat = setInterval(() => {
@@ -612,10 +668,15 @@ export async function createMinaDentalServer(options: CreateServerOptions = {}) 
     req.on('close', () => {
       clearInterval(heartbeat);
       sseClients.delete(clientId);
-      broadcastSse('presence', {
-        connectedClients: sseClients.size,
-        revision: clinicStore.revision,
-      });
+      broadcastSse(
+        'presence',
+        {
+          connectedClients: countSseClientsInScope('local'),
+          revision: clinicStore.revision,
+        },
+        undefined,
+        'local'
+      );
     });
   });
 
@@ -1169,27 +1230,256 @@ export async function createMinaDentalServer(options: CreateServerOptions = {}) 
       throw new Error('Unauthorized: Missing user identity');
     }
     const dbUser = await getOrCreateUser(uid, email, req.user?.name || null);
-    const workspaceKey = buildUserWorkspaceKey(uid);
-    const loaded = await loadClinicStoreFromSql(dbUser.id, workspaceKey);
+    const resolved = await resolveUserClinicWorkspace(dbUser);
     return {
       dbUser,
-      workspaceId: loaded.workspaceId,
-      ownerUserId: loaded.ownerUserId,
-      isServerVerifiedAdmin: dbUser.role === 'admin' && loaded.ownerUserId === dbUser.id,
-      store: loaded.store,
+      workspaceId: resolved.workspaceId,
+      workspaceScope: `ws:${resolved.workspaceId}`,
+      ownerUserId: resolved.ownerUserId,
+      clinicName: resolved.clinicName,
+      memberRole: resolved.memberRole,
+      canEditPrices: resolved.canEditPrices,
+      isOwner: resolved.isOwner,
+      isServerVerifiedAdmin: resolved.isManager,
+      store: resolved.store,
     };
   };
+
+  // Issue a short-lived single-use cryptographic ticket for workspace-scoped authenticated SSE
+  app.post('/api/sql/clinic/stream-ticket', requireAuth, async (req: AuthRequest, res) => {
+    if (!isCloudSqlConfigured()) {
+      return res.status(503).json({ error: 'Database service unavailable' });
+    }
+    try {
+      pruneExpiredSseTickets();
+      const ctx = await resolveSqlContext(req);
+      const ticket = crypto.randomBytes(24).toString('hex');
+      sseStreamTickets.set(ticket, {
+        workspaceId: ctx.workspaceId,
+        uid: ctx.dbUser.uid,
+        role: ctx.memberRole,
+        expiresAt: Date.now() + 60_000,
+      });
+      return res.json({
+        ok: true,
+        ticket,
+        workspaceId: ctx.workspaceId,
+        memberRole: ctx.memberRole,
+        canEditPrices: ctx.canEditPrices,
+        isManager: ctx.isServerVerifiedAdmin,
+      });
+    } catch (error: any) {
+      console.error('Failed to issue Cloud SQL stream ticket:', error);
+      return res.status(500).json({ error: 'Failed to create stream session' });
+    }
+  });
+
+  // Workspace-isolated authenticated SSE stream (never leaks data across clinics or unauthenticated tabs)
+  app.get('/api/sql/clinic/stream', (req, res) => {
+    pruneExpiredSseTickets();
+    const rawTicket = typeof req.query.ticket === 'string' ? req.query.ticket.trim() : '';
+    if (!rawTicket || !sseStreamTickets.has(rawTicket)) {
+      return res.status(401).json({ error: 'Unauthorized: Invalid or expired stream ticket' });
+    }
+    const ticketData = sseStreamTickets.get(rawTicket)!;
+    // Consume ticket immediately (single-use)
+    sseStreamTickets.delete(rawTicket);
+    if (ticketData.expiresAt <= Date.now()) {
+      return res.status(401).json({ error: 'Unauthorized: Expired stream ticket' });
+    }
+    if (sseClients.size >= MAX_SSE_CLIENTS) {
+      return res.status(503).json({ error: 'ظرفیت اتصال زنده سرور تکمیل است.' });
+    }
+
+    const rawCid = typeof req.query.clientId === 'string' ? req.query.clientId.trim() : '';
+    const clientId =
+      rawCid && rawCid.length <= 120
+        ? rawCid
+        : `sql-sse-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const workspaceScope = `ws:${ticketData.workspaceId}`;
+
+    res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+    res.setHeader('Cache-Control', 'no-cache, no-transform');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+    res.flushHeaders?.();
+
+    sseClients.set(clientId, {
+      id: clientId,
+      res,
+      connectedAt: Date.now(),
+      workspaceScope,
+    });
+
+    const scopedCount = countSseClientsInScope(workspaceScope);
+    res.write(
+      `event: connected\ndata: ${JSON.stringify({
+        type: 'connected',
+        clientId,
+        workspaceId: ticketData.workspaceId,
+        role: ticketData.role,
+        connectedClients: scopedCount,
+      })}\n\n`
+    );
+
+    broadcastSse(
+      'presence',
+      { connectedClients: scopedCount },
+      clientId,
+      workspaceScope
+    );
+
+    const heartbeat = setInterval(() => {
+      try {
+        res.write(`: heartbeat ${Date.now()}\n\n`);
+      } catch {
+        clearInterval(heartbeat);
+        sseClients.delete(clientId);
+      }
+    }, 25_000);
+
+    req.on('close', () => {
+      clearInterval(heartbeat);
+      sseClients.delete(clientId);
+      broadcastSse(
+        'presence',
+        { connectedClients: countSseClientsInScope(workspaceScope) },
+        undefined,
+        workspaceScope
+      );
+    });
+  });
+
+  // Shared Clinic Staff Access Management (Manager-only mutations)
+  app.get('/api/sql/clinic/members', requireAuth, async (req: AuthRequest, res) => {
+    if (!isCloudSqlConfigured()) {
+      return res.status(503).json({ error: 'Database service unavailable' });
+    }
+    try {
+      const ctx = await resolveSqlContext(req);
+      const members = await listClinicMembersInSql(ctx.workspaceId, ctx.ownerUserId);
+      return res.json({
+        ok: true,
+        workspaceId: ctx.workspaceId,
+        clinicName: ctx.clinicName,
+        currentUserAccess: {
+          email: ctx.dbUser.email,
+          role: ctx.memberRole,
+          canEditPrices: ctx.canEditPrices,
+          isManager: ctx.isServerVerifiedAdmin,
+          isOwner: ctx.isOwner,
+        },
+        members,
+      });
+    } catch (error: any) {
+      console.error('Failed to list Cloud SQL clinic members:', error);
+      return res.status(500).json({ error: error?.message || 'Failed to load clinic members' });
+    }
+  });
+
+  app.post('/api/sql/clinic/members', requireAuth, async (req: AuthRequest, res) => {
+    if (!isCloudSqlConfigured()) {
+      return res.status(503).json({ error: 'Database service unavailable' });
+    }
+    const sanitizedBody = stripDangerousObjectKeys(req.body);
+    const parsed = clinicMemberUpsertSchema.safeParse(sanitizedBody);
+    if (!parsed.success) {
+      return res.status(400).json({
+        error: parsed.error.issues[0]?.message || 'اطلاعات پرسنل نامعتبر است.',
+      });
+    }
+    try {
+      const ctx = await resolveSqlContext(req);
+      if (!ctx.isServerVerifiedAdmin) {
+        return res.status(403).json({
+          error: '⛔ افزودن یا ویرایش دسترسی ایمیل پرسنل فقط برای مدیر کلینیک مجاز است.',
+        });
+      }
+      const member = await upsertClinicMemberInSql(ctx.workspaceId, ctx.ownerUserId, {
+        email: parsed.data.email,
+        displayName: parsed.data.displayName,
+        role: parsed.data.role,
+        canEditPrices:
+          parsed.data.role === 'manager'
+            ? true
+            : Boolean(parsed.data.canEditPrices),
+        invitedBy: ctx.dbUser.email,
+      });
+      try {
+        await appendAuditLogInSql(ctx.workspaceId, {
+          actor: ctx.dbUser.displayName || ctx.dbUser.email,
+          role: ctx.memberRole,
+          action: 'تنظیم دسترسی پرسنل کلینیک',
+          details: `دسترسی ${member.email} با نقش ${member.role} (ویرایش قیمت: ${member.canEditPrices ? 'مجاز' : 'قفل'}) ثبت شد.`,
+          severity: 'info',
+        });
+      } catch {
+        // non-fatal audit log
+      }
+      return res.json({ ok: true, member });
+    } catch (error: any) {
+      console.error('Failed to upsert Cloud SQL clinic member:', error);
+      return res.status(500).json({ error: error?.message || 'Failed to save clinic member' });
+    }
+  });
+
+  app.delete('/api/sql/clinic/members/:id', requireAuth, async (req: AuthRequest, res) => {
+    if (!isCloudSqlConfigured()) {
+      return res.status(503).json({ error: 'Database service unavailable' });
+    }
+    const memberId = Number(req.params.id);
+    if (!Number.isInteger(memberId) || memberId <= 0) {
+      return res.status(400).json({ error: 'شناسه عضو کلینیک نامعتبر است.' });
+    }
+    try {
+      const ctx = await resolveSqlContext(req);
+      if (!ctx.isServerVerifiedAdmin) {
+        return res.status(403).json({
+          error: '⛔ لغو دسترسی پرسنل فقط برای مدیر کلینیک مجاز است.',
+        });
+      }
+      const result = await removeClinicMemberInSql(ctx.workspaceId, ctx.ownerUserId, memberId);
+      if (!result.removed) {
+        const status = result.reason === 'cannot_remove_owner' ? 403 : 404;
+        return res.status(status).json({
+          error:
+            result.reason === 'cannot_remove_owner'
+              ? '⛔ حذف مالک اصلی کلینیک امکان‌پذیر نیست.'
+              : 'عضو انتخاب‌شده یافت نشد.',
+        });
+      }
+      try {
+        await appendAuditLogInSql(ctx.workspaceId, {
+          actor: ctx.dbUser.displayName || ctx.dbUser.email,
+          role: ctx.memberRole,
+          action: 'لغو دسترسی پرسنل کلینیک',
+          details: `دسترسی ${result.email || memberId} از کلینیک حذف شد.`,
+          severity: 'warning',
+        });
+      } catch {
+        // non-fatal audit log
+      }
+      return res.json({ ok: true, removedId: memberId });
+    } catch (error: any) {
+      console.error('Failed to remove Cloud SQL clinic member:', error);
+      return res.status(500).json({ error: error?.message || 'Failed to remove clinic member' });
+    }
+  });
 
   app.get('/api/sql/clinic/state', requireAuth, async (req: AuthRequest, res) => {
     if (!isCloudSqlConfigured()) {
       return res.status(503).json({ error: 'Database service unavailable' });
     }
     try {
-      const { store } = await resolveSqlContext(req);
+      const ctx = await resolveSqlContext(req);
       return res.json({
         ok: true,
-        ...store,
-        connectedClients: sseClients.size,
+        ...ctx.store,
+        workspaceId: ctx.workspaceId,
+        memberRole: ctx.memberRole,
+        canEditPrices: ctx.canEditPrices,
+        isManager: ctx.isServerVerifiedAdmin,
+        connectedClients: Math.max(1, countSseClientsInScope(ctx.workspaceScope)),
       });
     } catch (error: any) {
       console.error('Failed to fetch Cloud SQL clinic state:', error);
@@ -1217,11 +1507,18 @@ export async function createMinaDentalServer(options: CreateServerOptions = {}) 
     }
 
     try {
-      const { workspaceId, store: currentSqlStore } = await resolveSqlContext(req);
+      const ctx = await resolveSqlContext(req);
+      const {
+        workspaceId,
+        workspaceScope,
+        memberRole,
+        canEditPrices,
+        isServerVerifiedAdmin,
+        store: currentSqlStore,
+      } = ctx;
       const {
         clientId,
         actorName,
-        actorRole,
         baseRevision,
         mode,
         patients,
@@ -1238,10 +1535,13 @@ export async function createMinaDentalServer(options: CreateServerOptions = {}) 
         typeof baseRevision === 'number' &&
         baseRevision < currentSqlStore.revision;
 
-      const deletedPatientsSet = new Set(deletedPatientIds || []);
+      // Only server-verified managers can propagate patient deletions
+      const deletedPatientsSet = isServerVerifiedAdmin
+        ? new Set(deletedPatientIds || [])
+        : new Set<string>();
       const deletedAppointmentsSet = new Set(deletedAppointmentIds || []);
 
-      const nextPatients = isConcurrentEdit
+      const mergedPatients = isConcurrentEdit
         ? mergePatientEntities(
             currentSqlStore.patients,
             patients as Record<string, unknown>[],
@@ -1265,26 +1565,36 @@ export async function createMinaDentalServer(options: CreateServerOptions = {}) 
           )
         : (inventory as Record<string, unknown>[]);
 
-      const nextUsers = Array.isArray(users)
+      const sanitizedUsers = Array.isArray(users)
         ? sanitizeSyncedUsers(users as Record<string, unknown>[])
-        : currentSqlStore.users;
+        : undefined;
 
-      const nextClinicConfig =
-        clinicConfig && typeof clinicConfig === 'object'
-          ? { ...currentSqlStore.clinicConfig, ...(clinicConfig as Record<string, unknown>) }
-          : currentSqlStore.clinicConfig;
+      // Server-side RBAC & financial price-lock immutability guard
+      const guarded = enforceServerPriceAndRoleGuard({
+        existingStore: currentSqlStore,
+        incomingPatients: mergedPatients,
+        incomingUsers: sanitizedUsers,
+        incomingClinicConfig:
+          clinicConfig && typeof clinicConfig === 'object'
+            ? (clinicConfig as Record<string, unknown>)
+            : undefined,
+        canEditPrices,
+        isManager: isServerVerifiedAdmin,
+      });
+
+      const priceLockEnforced = guarded.enforcedViolations.length > 0;
 
       const nextStore: PersistedClinicStore = {
         initialized: true,
         revision: currentSqlStore.revision + 1,
-        mode: mode ?? currentSqlStore.mode,
+        mode: isServerVerifiedAdmin ? (mode ?? currentSqlStore.mode) : currentSqlStore.mode,
         updatedAt: new Date().toISOString(),
         updatedBy: actorName || req.user?.email || 'پرسنل کلینیک',
-        patients: nextPatients,
+        patients: guarded.patients,
         appointments: nextAppointments,
         inventory: nextInventory,
-        users: nextUsers,
-        clinicConfig: nextClinicConfig,
+        users: guarded.users,
+        clinicConfig: guarded.clinicConfig,
       };
 
       await saveClinicStoreToSql(workspaceId, nextStore);
@@ -1302,11 +1612,25 @@ export async function createMinaDentalServer(options: CreateServerOptions = {}) 
         }
       }
 
+      if (priceLockEnforced) {
+        try {
+          await appendAuditLogInSql(workspaceId, {
+            actor: nextStore.updatedBy,
+            role: memberRole,
+            action: 'اعمال قفل قیمت و سطح دسترسی سمت سرور',
+            details: guarded.enforcedViolations.slice(0, 5).join(' | '),
+            severity: 'warning',
+          });
+        } catch {
+          // non-fatal audit log failure
+        }
+      }
+
       if (isConcurrentEdit) {
         try {
           await appendAuditLogInSql(workspaceId, {
             actor: nextStore.updatedBy,
-            role: actorRole || 'staff',
+            role: memberRole,
             action: 'ادغام خودکار ویرایش همزمان چنددستگاهی',
             details: `تغییرات نسخه ${baseRevision} با نسخه ${currentSqlStore.revision} بدون از دست رفتن اطلاعات ادغام شد.`,
             severity: 'warning',
@@ -1316,35 +1640,43 @@ export async function createMinaDentalServer(options: CreateServerOptions = {}) 
         }
       }
 
+      const scopedConnected = Math.max(1, countSseClientsInScope(workspaceScope));
+
+      // Broadcast ONLY to authenticated devices in the SAME clinic workspace
       broadcastSse(
         'clinic-sync',
         {
           sourceClientId: clientId,
           actorName: nextStore.updatedBy,
-          actorRole: actorRole || 'staff',
+          actorRole: memberRole,
           revision: nextStore.revision,
           mode: nextStore.mode,
           updatedAt: nextStore.updatedAt,
           updatedBy: nextStore.updatedBy,
-          connectedClients: sseClients.size,
-          mergedConflict: isConcurrentEdit,
+          connectedClients: scopedConnected,
+          mergedConflict: isConcurrentEdit || priceLockEnforced,
           patients: nextStore.patients,
           appointments: nextStore.appointments,
           inventory: nextStore.inventory,
           users: nextStore.users,
           clinicConfig: nextStore.clinicConfig,
         },
-        clientId
+        clientId,
+        workspaceScope
       );
+
+      const shouldConvergeClient = isConcurrentEdit || priceLockEnforced;
 
       return res.json({
         ok: true,
         revision: nextStore.revision,
         mode: nextStore.mode,
         updatedAt: nextStore.updatedAt,
-        connectedClients: sseClients.size,
-        mergedConflict: isConcurrentEdit,
-        ...(isConcurrentEdit
+        connectedClients: scopedConnected,
+        mergedConflict: shouldConvergeClient,
+        priceLockEnforced,
+        enforcedViolations: guarded.enforcedViolations,
+        ...(shouldConvergeClient
           ? {
               patients: nextStore.patients,
               appointments: nextStore.appointments,
@@ -1374,7 +1706,12 @@ export async function createMinaDentalServer(options: CreateServerOptions = {}) 
     const { clientId, actorName, isManager, mode, preserveInventory, inventory } = parsed.data;
 
     try {
-      const { workspaceId, isServerVerifiedAdmin, store: currentSqlStore } = await resolveSqlContext(req);
+      const {
+        workspaceId,
+        workspaceScope,
+        isServerVerifiedAdmin,
+        store: currentSqlStore,
+      } = await resolveSqlContext(req);
       if (!isServerVerifiedAdmin || !isManager) {
         return res.status(403).json({
           error: '⛔ تغییر حالت کلینیک و پاک‌سازی داده‌های نمایشی فقط برای مدیر کلینیک مجاز است.',
@@ -1417,7 +1754,7 @@ export async function createMinaDentalServer(options: CreateServerOptions = {}) 
       try {
         await appendAuditLogInSql(workspaceId, {
           actor: nextStore.updatedBy,
-          role: 'admin',
+          role: 'manager',
           action: mode === 'live_production' ? 'شروع حالت عملیاتی واقعی کلینیک' : 'تغییر وضعیت کلینیک به نمایشی',
           details: `وضعیت کلینیک با حفظ بکاپ پیشین تغییر یافت (Rev #${nextStore.revision}).`,
           severity: 'critical',
@@ -1426,24 +1763,26 @@ export async function createMinaDentalServer(options: CreateServerOptions = {}) 
         // non-fatal audit log
       }
 
+      const scopedConnected = Math.max(1, countSseClientsInScope(workspaceScope));
       broadcastSse(
         'clinic-sync',
         {
           sourceClientId: clientId,
           actorName: nextStore.updatedBy,
-          actorRole: 'admin',
+          actorRole: 'manager',
           revision: nextStore.revision,
           mode: nextStore.mode,
           updatedAt: nextStore.updatedAt,
           updatedBy: nextStore.updatedBy,
-          connectedClients: sseClients.size,
+          connectedClients: scopedConnected,
           patients: nextStore.patients,
           appointments: nextStore.appointments,
           inventory: nextStore.inventory,
           users: nextStore.users,
           clinicConfig: nextStore.clinicConfig,
         },
-        clientId
+        clientId,
+        workspaceScope
       );
 
       return res.json({
@@ -1484,14 +1823,14 @@ export async function createMinaDentalServer(options: CreateServerOptions = {}) 
       });
     }
     try {
-      const { workspaceId, store } = await resolveSqlContext(req);
+      const { workspaceId, memberRole, store } = await resolveSqlContext(req);
       const label = parsed.data.label || `اسنپ‌شات دستی (${new Date().toISOString().slice(0, 10)})`;
       const actor = parsed.data.actorName || req.user?.email || 'مدیر کلینیک';
       const meta = await createBackupInSql(workspaceId, store, label, actor);
       try {
         await appendAuditLogInSql(workspaceId, {
           actor,
-          role: 'admin',
+          role: memberRole,
           action: 'ثبت نسخه پشتیبان جدید',
           details: `اسنپ‌شات «${label}» ثبت شد.`,
           severity: 'info',
@@ -1523,7 +1862,12 @@ export async function createMinaDentalServer(options: CreateServerOptions = {}) 
       return res.status(400).json({ error: 'شناسه فایل پشتیبان غیرمجاز است.' });
     }
     try {
-      const { workspaceId, isServerVerifiedAdmin, store: currentSqlStore } = await resolveSqlContext(req);
+      const {
+        workspaceId,
+        workspaceScope,
+        isServerVerifiedAdmin,
+        store: currentSqlStore,
+      } = await resolveSqlContext(req);
       if (!isServerVerifiedAdmin || !isManager) {
         return res.status(403).json({
           error: '⛔ بازیابی نسخه پشتیبان فقط توسط مدیر کلینیک مجاز است.',
@@ -1555,7 +1899,7 @@ export async function createMinaDentalServer(options: CreateServerOptions = {}) 
       try {
         await appendAuditLogInSql(workspaceId, {
           actor: nextStore.updatedBy,
-          role: 'admin',
+          role: 'manager',
           action: 'بازیابی نسخه پشتیبان',
           details: `نسخه «${snapshot.meta.label}» با موفقیت بازیابی شد.`,
           severity: 'critical',
@@ -1565,24 +1909,26 @@ export async function createMinaDentalServer(options: CreateServerOptions = {}) 
         // non-fatal audit log
       }
 
+      const scopedConnected = Math.max(1, countSseClientsInScope(workspaceScope));
       broadcastSse(
         'clinic-sync',
         {
           sourceClientId: clientId,
           actorName: nextStore.updatedBy,
-          actorRole: 'admin',
+          actorRole: 'manager',
           revision: nextStore.revision,
           mode: nextStore.mode,
           updatedAt: nextStore.updatedAt,
           updatedBy: nextStore.updatedBy,
-          connectedClients: sseClients.size,
+          connectedClients: scopedConnected,
           patients: nextStore.patients,
           appointments: nextStore.appointments,
           inventory: nextStore.inventory,
           users: nextStore.users,
           clinicConfig: nextStore.clinicConfig,
         },
-        clientId
+        clientId,
+        workspaceScope
       );
 
       return res.json({
@@ -1627,10 +1973,10 @@ export async function createMinaDentalServer(options: CreateServerOptions = {}) 
       });
     }
     try {
-      const { workspaceId } = await resolveSqlContext(req);
+      const { workspaceId, memberRole } = await resolveSqlContext(req);
       const entry = await appendAuditLogInSql(workspaceId, {
         actor: parsed.data.actor,
-        role: parsed.data.role || 'staff',
+        role: memberRole,
         action: parsed.data.action,
         details: parsed.data.details || '',
         severity: parsed.data.severity || 'info',

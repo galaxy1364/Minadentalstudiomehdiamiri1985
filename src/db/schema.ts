@@ -1,12 +1,14 @@
 import { relations } from 'drizzle-orm';
 import {
   bigint,
+  index,
   integer,
   jsonb,
   pgTable,
   serial,
   text,
   timestamp,
+  uniqueIndex,
 } from 'drizzle-orm/pg-core';
 
 export const users = pgTable('users', {
@@ -43,81 +45,131 @@ export const clinicWorkspaces = pgTable('clinic_workspaces', {
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });
 
-export const clinicPatients = pgTable('clinic_patients', {
-  id: text('id').primaryKey(),
-  workspaceId: integer('workspace_id')
-    .references(() => clinicWorkspaces.id, { onDelete: 'cascade' })
-    .notNull(),
-  fileNumber: text('file_number').notNull().default(''),
-  fullName: text('full_name').notNull().default(''),
-  phone: text('phone').notNull().default(''),
-  totalCost: bigint('total_cost', { mode: 'number' }).notNull().default(0),
-  paidAmount: bigint('paid_amount', { mode: 'number' }).notNull().default(0),
-  balance: bigint('balance', { mode: 'number' }).notNull().default(0),
-  payload: jsonb('payload').$type<Record<string, unknown>>().notNull(),
-  updatedAt: timestamp('updated_at').defaultNow().notNull(),
-});
+export const clinicMembers = pgTable(
+  'clinic_members',
+  {
+    id: serial('id').primaryKey(),
+    workspaceId: integer('workspace_id')
+      .references(() => clinicWorkspaces.id, { onDelete: 'cascade' })
+      .notNull(),
+    email: text('email').notNull(),
+    userId: integer('user_id').references(() => users.id, {
+      onDelete: 'set null',
+    }),
+    displayName: text('display_name').notNull().default(''),
+    role: text('role').notNull().default('secretary'),
+    canEditPrices: integer('can_edit_prices').notNull().default(0),
+    isActive: integer('is_active').notNull().default(1),
+    invitedBy: text('invited_by').notNull().default(''),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex('clinic_members_workspace_email_uq').on(
+      table.workspaceId,
+      table.email
+    ),
+    index('clinic_members_email_idx').on(table.email),
+    index('clinic_members_workspace_idx').on(table.workspaceId),
+  ]
+);
 
-export const clinicAppointments = pgTable('clinic_appointments', {
-  id: text('id').primaryKey(),
-  workspaceId: integer('workspace_id')
-    .references(() => clinicWorkspaces.id, { onDelete: 'cascade' })
-    .notNull(),
-  patientId: text('patient_id').notNull().default(''),
-  date: text('date').notNull().default(''),
-  time: text('time').notNull().default(''),
-  status: text('status').notNull().default('scheduled'),
-  payload: jsonb('payload').$type<Record<string, unknown>>().notNull(),
-  updatedAt: timestamp('updated_at').defaultNow().notNull(),
-});
+export const clinicPatients = pgTable(
+  'clinic_patients',
+  {
+    id: text('id').primaryKey(),
+    workspaceId: integer('workspace_id')
+      .references(() => clinicWorkspaces.id, { onDelete: 'cascade' })
+      .notNull(),
+    fileNumber: text('file_number').notNull().default(''),
+    fullName: text('full_name').notNull().default(''),
+    phone: text('phone').notNull().default(''),
+    totalCost: bigint('total_cost', { mode: 'number' }).notNull().default(0),
+    paidAmount: bigint('paid_amount', { mode: 'number' }).notNull().default(0),
+    balance: bigint('balance', { mode: 'number' }).notNull().default(0),
+    payload: jsonb('payload').$type<Record<string, unknown>>().notNull(),
+    updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  },
+  (table) => [index('clinic_patients_workspace_idx').on(table.workspaceId)]
+);
 
-export const clinicInventory = pgTable('clinic_inventory', {
-  id: text('id').primaryKey(),
-  workspaceId: integer('workspace_id')
-    .references(() => clinicWorkspaces.id, { onDelete: 'cascade' })
-    .notNull(),
-  name: text('name').notNull().default(''),
-  stock: integer('stock').notNull().default(0),
-  minAlert: integer('min_alert').notNull().default(0),
-  payload: jsonb('payload').$type<Record<string, unknown>>().notNull(),
-  updatedAt: timestamp('updated_at').defaultNow().notNull(),
-});
+export const clinicAppointments = pgTable(
+  'clinic_appointments',
+  {
+    id: text('id').primaryKey(),
+    workspaceId: integer('workspace_id')
+      .references(() => clinicWorkspaces.id, { onDelete: 'cascade' })
+      .notNull(),
+    patientId: text('patient_id').notNull().default(''),
+    date: text('date').notNull().default(''),
+    time: text('time').notNull().default(''),
+    status: text('status').notNull().default('scheduled'),
+    payload: jsonb('payload').$type<Record<string, unknown>>().notNull(),
+    updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  },
+  (table) => [index('clinic_appointments_workspace_idx').on(table.workspaceId)]
+);
 
-export const clinicBackups = pgTable('clinic_backups', {
-  id: text('id').primaryKey(),
-  workspaceId: integer('workspace_id')
-    .references(() => clinicWorkspaces.id, { onDelete: 'cascade' })
-    .notNull(),
-  label: text('label').notNull(),
-  createdBy: text('created_by').notNull(),
-  revision: integer('revision').notNull().default(0),
-  mode: text('mode').notNull().default('demo_seeded'),
-  patientsCount: integer('patients_count').notNull().default(0),
-  appointmentsCount: integer('appointments_count').notNull().default(0),
-  inventoryCount: integer('inventory_count').notNull().default(0),
-  bytes: integer('bytes').notNull().default(0),
-  snapshotState: jsonb('snapshot_state')
-    .$type<Record<string, unknown>>()
-    .notNull(),
-  createdAt: timestamp('created_at').defaultNow().notNull(),
-});
+export const clinicInventory = pgTable(
+  'clinic_inventory',
+  {
+    id: text('id').primaryKey(),
+    workspaceId: integer('workspace_id')
+      .references(() => clinicWorkspaces.id, { onDelete: 'cascade' })
+      .notNull(),
+    name: text('name').notNull().default(''),
+    stock: integer('stock').notNull().default(0),
+    minAlert: integer('min_alert').notNull().default(0),
+    payload: jsonb('payload').$type<Record<string, unknown>>().notNull(),
+    updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  },
+  (table) => [index('clinic_inventory_workspace_idx').on(table.workspaceId)]
+);
 
-export const clinicAuditLogs = pgTable('clinic_audit_logs', {
-  id: text('id').primaryKey(),
-  workspaceId: integer('workspace_id')
-    .references(() => clinicWorkspaces.id, { onDelete: 'cascade' })
-    .notNull(),
-  actor: text('actor').notNull(),
-  role: text('role').notNull(),
-  action: text('action').notNull(),
-  severity: text('severity').notNull().default('info'),
-  details: text('details').notNull(),
-  targetId: text('target_id'),
-  createdAt: timestamp('created_at').defaultNow().notNull(),
-});
+export const clinicBackups = pgTable(
+  'clinic_backups',
+  {
+    id: text('id').primaryKey(),
+    workspaceId: integer('workspace_id')
+      .references(() => clinicWorkspaces.id, { onDelete: 'cascade' })
+      .notNull(),
+    label: text('label').notNull(),
+    createdBy: text('created_by').notNull(),
+    revision: integer('revision').notNull().default(0),
+    mode: text('mode').notNull().default('demo_seeded'),
+    patientsCount: integer('patients_count').notNull().default(0),
+    appointmentsCount: integer('appointments_count').notNull().default(0),
+    inventoryCount: integer('inventory_count').notNull().default(0),
+    bytes: integer('bytes').notNull().default(0),
+    snapshotState: jsonb('snapshot_state')
+      .$type<Record<string, unknown>>()
+      .notNull(),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+  },
+  (table) => [index('clinic_backups_workspace_idx').on(table.workspaceId)]
+);
+
+export const clinicAuditLogs = pgTable(
+  'clinic_audit_logs',
+  {
+    id: text('id').primaryKey(),
+    workspaceId: integer('workspace_id')
+      .references(() => clinicWorkspaces.id, { onDelete: 'cascade' })
+      .notNull(),
+    actor: text('actor').notNull(),
+    role: text('role').notNull(),
+    action: text('action').notNull(),
+    severity: text('severity').notNull().default('info'),
+    details: text('details').notNull(),
+    targetId: text('target_id'),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+  },
+  (table) => [index('clinic_audit_logs_workspace_idx').on(table.workspaceId)]
+);
 
 export const usersRelations = relations(users, ({ many }) => ({
   workspaces: many(clinicWorkspaces),
+  memberships: many(clinicMembers),
 }));
 
 export const clinicWorkspacesRelations = relations(
@@ -127,6 +179,7 @@ export const clinicWorkspacesRelations = relations(
       fields: [clinicWorkspaces.ownerUserId],
       references: [users.id],
     }),
+    members: many(clinicMembers),
     patients: many(clinicPatients),
     appointments: many(clinicAppointments),
     inventory: many(clinicInventory),
@@ -134,6 +187,17 @@ export const clinicWorkspacesRelations = relations(
     auditLogs: many(clinicAuditLogs),
   })
 );
+
+export const clinicMembersRelations = relations(clinicMembers, ({ one }) => ({
+  workspace: one(clinicWorkspaces, {
+    fields: [clinicMembers.workspaceId],
+    references: [clinicWorkspaces.id],
+  }),
+  user: one(users, {
+    fields: [clinicMembers.userId],
+    references: [users.id],
+  }),
+}));
 
 export const clinicPatientsRelations = relations(clinicPatients, ({ one }) => ({
   workspace: one(clinicWorkspaces, {

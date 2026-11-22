@@ -249,8 +249,10 @@ export function useClinicPersistence() {
     let lastAuthedUid: string | null = null;
     const unsubCloudAuth = subscribeGoogleDriveAuth((authSnap) => {
       const uid = authSnap.user?.uid ?? null;
-      if (!uid || uid === lastAuthedUid) return;
+      if (uid === lastAuthedUid) return;
       lastAuthedUid = uid;
+      clinicRealtimeClient.reconnectStream();
+      if (!uid) return;
       void clinicRealtimeClient.fetchAuthoritativeState().then((remote) => {
         if (remote && remote.initialized) {
           applyRemoteSnapshot(remote);

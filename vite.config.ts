@@ -248,24 +248,51 @@ export default defineConfig(() => {
       rollupOptions: {
         output: {
           manualChunks(id) {
-            if (!id.includes('node_modules')) return undefined;
-            if (id.includes('/react/') || id.includes('/react-dom/') || id.includes('/scheduler/')) {
-              return 'vendor-react';
+            if (id.includes('node_modules')) {
+              if (id.includes('/react/') || id.includes('/react-dom/') || id.includes('/scheduler/')) {
+                return 'vendor-react';
+              }
+              if (id.includes('/firebase/') || id.includes('/@firebase/')) {
+                return 'vendor-firebase';
+              }
+              if (id.includes('/motion/') || id.includes('/framer-motion/')) {
+                return 'vendor-motion';
+              }
+              if (id.includes('/d3') || id.includes('/recharts')) {
+                return 'vendor-charts';
+              }
+              if (id.includes('/lucide-react')) {
+                return 'vendor-icons';
+              }
+              if (id.includes('/@zxing') || id.includes('/jsqr') || id.includes('/qrcode')) {
+                return 'vendor-scanner';
+              }
+              if (id.includes('/@supabase')) {
+                return 'vendor-supabase';
+              }
+              if (id.includes('/zod')) {
+                return 'vendor-zod';
+              }
+              return undefined;
             }
-            if (id.includes('/d3') || id.includes('/recharts')) {
-              return 'vendor-charts';
+            if (
+              id.includes('/src/components/PalmerChartModal') ||
+              id.includes('/src/components/PatientFileModal')
+            ) {
+              return 'clinic-modals-core';
             }
-            if (id.includes('/lucide-react')) {
-              return 'vendor-icons';
+            if (
+              id.includes('/src/components/views/FinancialView') ||
+              id.includes('/src/components/views/AppointmentsView')
+            ) {
+              return 'clinic-views-ops';
             }
-            if (id.includes('/@zxing') || id.includes('/jsqr') || id.includes('/qrcode')) {
-              return 'vendor-scanner';
-            }
-            if (id.includes('/@supabase')) {
-              return 'vendor-supabase';
-            }
-            if (id.includes('/zod')) {
-              return 'vendor-zod';
+            if (
+              id.includes('/src/components/views/LabModuleView') ||
+              id.includes('/src/components/views/ImplantModuleView') ||
+              id.includes('/src/components/views/TreatmentsView')
+            ) {
+              return 'clinic-views-clinical';
             }
             return undefined;
           },

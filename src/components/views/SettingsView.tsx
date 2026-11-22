@@ -23,6 +23,7 @@ import { usePWAInstall } from '../../hooks/usePWAInstall';
 import { useEscapeKey } from '../../hooks/useDialogA11y';
 import { ViewportModalPortal } from '../ViewportModalPortal';
 import { GoogleDriveBackupPanel } from '../GoogleDriveBackupPanel';
+import { ClinicStaffCloudAccessPanel } from '../ClinicStaffCloudAccessPanel';
 import {
   getGoogleDriveAccessToken,
   uploadBackupToGoogleDrive,
@@ -3064,6 +3065,11 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 onRestoreBackupData={(restored) => {
                   applyRestoredPayload(restored, 'Google Drive');
                 }}
+                onNotify={(msg) => showToast(msg)}
+              />
+
+              {/* 4C. Shared Multi-User Clinic Staff Access & Server Price Lock */}
+              <ClinicStaffCloudAccessPanel
                 onNotify={(msg) => showToast(msg)}
               />
 

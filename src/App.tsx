@@ -9,13 +9,10 @@ import { AddLabOrderModal } from './components/AddLabOrderModal';
 import { AddPaymentModal } from './components/AddPaymentModal';
 import { SyncNotificationToast } from './components/SyncNotificationToast';
 import { RoleSwitcherModal } from './components/RoleSwitcherModal';
-import { BackupModal } from './components/BackupModal';
 import { NotificationDrawer } from './components/NotificationDrawer';
 import { OfflineIndicator } from './components/OfflineIndicator';
 import { TreatmentInvoiceModal } from './components/TreatmentInvoiceModal';
-import { DoctorCommissionModal } from './components/DoctorCommissionModal';
 import { IncomingCallBanner } from './components/IncomingCallBanner';
-import { LabPrescriptionModal } from './components/LabPrescriptionModal';
 import { ClinicalHudDrawer } from './components/ClinicalHudDrawer';
 import { AccessibilityControlsModal, DisplayTheme, FontScale } from './components/AccessibilityControlsModal';
 import { OneHandedActionSheet } from './components/OneHandedActionSheet';
@@ -25,11 +22,6 @@ import { ModuleErrorBoundary } from './components/ModuleErrorBoundary';
 import { ClinicSessionLockOverlay } from './components/ClinicSessionLockOverlay';
 import { GlobalCommandPalette } from './components/GlobalCommandPalette';
 import { GlobalAuditTrackerModal } from './components/GlobalAuditTrackerModal';
-import { LiveSyncSimulatorModal } from './components/LiveSyncSimulatorModal';
-import { SupabaseTestModal } from './components/SupabaseTestModal';
-import { DigitalLabPortalModal } from './components/DigitalLabPortalModal';
-import { PatientBookingPortalModal } from './components/PatientBookingPortalModal';
-import { SmsGatewaySettingsModal } from './components/SmsGatewaySettingsModal';
 import { lazyWithRetry } from './utils/lazyWithRetry';
 import { flushSync } from 'react-dom';
 import { undoManager } from './utils/undoManager';
@@ -76,6 +68,14 @@ const PhaseAuditSuiteModal = lazyWithRetry(() => import('./components/PhaseAudit
 const ProjectDownloadModal = lazyWithRetry(() => import('./components/ProjectDownloadModal').then(m => ({ default: m.ProjectDownloadModal })));
 const RealWorldClinicTestConsole = lazyWithRetry(() => import('./components/RealWorldClinicTestConsole').then(m => ({ default: m.RealWorldClinicTestConsole })));
 const UniversalClinicScannerModal = lazyWithRetry(() => import('./components/UniversalClinicScannerModal').then(m => ({ default: m.UniversalClinicScannerModal })));
+const BackupModal = lazyWithRetry(() => import('./components/BackupModal').then(m => ({ default: m.BackupModal })));
+const DoctorCommissionModal = lazyWithRetry(() => import('./components/DoctorCommissionModal').then(m => ({ default: m.DoctorCommissionModal })));
+const LabPrescriptionModal = lazyWithRetry(() => import('./components/LabPrescriptionModal').then(m => ({ default: m.LabPrescriptionModal })));
+const LiveSyncSimulatorModal = lazyWithRetry(() => import('./components/LiveSyncSimulatorModal').then(m => ({ default: m.LiveSyncSimulatorModal })));
+const SupabaseTestModal = lazyWithRetry(() => import('./components/SupabaseTestModal').then(m => ({ default: m.SupabaseTestModal })));
+const DigitalLabPortalModal = lazyWithRetry(() => import('./components/DigitalLabPortalModal').then(m => ({ default: m.DigitalLabPortalModal })));
+const PatientBookingPortalModal = lazyWithRetry(() => import('./components/PatientBookingPortalModal').then(m => ({ default: m.PatientBookingPortalModal })));
+const SmsGatewaySettingsModal = lazyWithRetry(() => import('./components/SmsGatewaySettingsModal').then(m => ({ default: m.SmsGatewaySettingsModal })));
 
 // Mock Data, Types & Realtime Engine
 import { INITIAL_INVENTORY } from './data/mockData';
@@ -4741,26 +4741,30 @@ export default function App() {
             onLockSession={lockSession}
           />
 
-          {/* Cloud and Local Backup & Restore Modal */}
-          <BackupModal
-            isOpen={backupModalOpen}
-            onClose={() => setBackupModalOpen(false)}
-            clinicName="مرکز تخصصی دندانپزشکی مینادنتال"
-            patients={patients}
-            appointments={appointments}
-            inventory={inventory}
-            users={users}
-            platforms={platforms}
-            isManager={isClinicManager(currentUser)}
-            onRestoreData={(restored) => {
-              if (!verifyManagerDeletion(currentUser, 'بازگردانی نسخه پشتیبان و جایگزینی داده‌ها', 'backup-restore')) {
-                return;
-              }
-              if (restored.patients) setPatients(restored.patients);
-              if (restored.appointments) setAppointments(restored.appointments);
-              if (restored.inventory) setInventory(restored.inventory);
-            }}
-          />
+          {/* Cloud and Local Backup & Restore Modal (Lazy) */}
+          {backupModalOpen && (
+            <Suspense fallback={null}>
+              <BackupModal
+                isOpen={backupModalOpen}
+                onClose={() => setBackupModalOpen(false)}
+                clinicName="مرکز تخصصی دندانپزشکی مینادنتال"
+                patients={patients}
+                appointments={appointments}
+                inventory={inventory}
+                users={users}
+                platforms={platforms}
+                isManager={isClinicManager(currentUser)}
+                onRestoreData={(restored) => {
+                  if (!verifyManagerDeletion(currentUser, 'بازگردانی نسخه پشتیبان و جایگزینی داده‌ها', 'backup-restore')) {
+                    return;
+                  }
+                  if (restored.patients) setPatients(restored.patients);
+                  if (restored.appointments) setAppointments(restored.appointments);
+                  if (restored.inventory) setInventory(restored.inventory);
+                }}
+              />
+            </Suspense>
+          )}
 
           {/* World-Class Slide-over Notification & Reminders Drawer */}
           <NotificationDrawer
@@ -4787,20 +4791,28 @@ export default function App() {
             </ModuleErrorBoundary>
           )}
 
-          {/* Doctor Commission & Surgical Profit-Sharing Modal */}
-          <DoctorCommissionModal
-            isOpen={commissionModalOpen}
-            onClose={() => setCommissionModalOpen(false)}
-            patients={patients}
-          />
+          {/* Doctor Commission & Surgical Profit-Sharing Modal (Lazy) */}
+          {commissionModalOpen && (
+            <Suspense fallback={null}>
+              <DoctorCommissionModal
+                isOpen={commissionModalOpen}
+                onClose={() => setCommissionModalOpen(false)}
+                patients={patients}
+              />
+            </Suspense>
+          )}
 
-          {/* Official Printable Lab Prescription Slip Modal */}
-          <LabPrescriptionModal
-            isOpen={!!labSlipOrder}
-            onClose={() => setLabSlipOrder(null)}
-            order={labSlipOrder}
-            patient={(labSlipOrder?.patientId ? patientIndex.byId.get(labSlipOrder.patientId) : undefined) || null}
-          />
+          {/* Official Printable Lab Prescription Slip Modal (Lazy) */}
+          {!!labSlipOrder && (
+            <Suspense fallback={null}>
+              <LabPrescriptionModal
+                isOpen={!!labSlipOrder}
+                onClose={() => setLabSlipOrder(null)}
+                order={labSlipOrder}
+                patient={(labSlipOrder?.patientId ? patientIndex.byId.get(labSlipOrder.patientId) : undefined) || null}
+              />
+            </Suspense>
+          )}
 
           {/* Digital Lab Technician Portal Modal (Lazy) */}
           {digitalLabModalOpen && (

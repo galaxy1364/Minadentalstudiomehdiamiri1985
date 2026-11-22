@@ -85,6 +85,35 @@ export interface ServerClinicSummaryReport {
   auditEventsCount: number;
 }
 
+export type CloudMemberRole = 'manager' | 'doctor' | 'secretary' | 'assistant';
+
+export interface CloudClinicMember {
+  id: number;
+  workspaceId: number;
+  email: string;
+  userId: number | null;
+  displayName: string;
+  role: CloudMemberRole;
+  canEditPrices: boolean;
+  isActive: boolean;
+  isOwner: boolean;
+  invitedBy: string;
+  createdAt: string;
+}
+
+export interface CloudClinicMembersResponse {
+  workspaceId: number;
+  clinicName: string;
+  currentUserAccess: {
+    email: string;
+    role: CloudMemberRole;
+    canEditPrices: boolean;
+    isManager: boolean;
+    isOwner: boolean;
+  };
+  members: CloudClinicMember[];
+}
+
 type SyncListener = (snapshot: LiveSyncSnapshot) => void;
 type StatusListener = (meta: LiveSyncStatusMeta) => void;
 type IncomingCallListener = (call: IncomingCallPushEvent) => void;
@@ -94,6 +123,7 @@ class ClinicRealtimeClient {
   private eventSource: EventSource | null = null;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private reconnectAttempt = 0;
+  private activeStreamOpener: (() => void) | null = null;
   private syncListeners = new Set<SyncListener>();
   private statusListeners = new Set<StatusListener>();
   private incomingCallListeners = new Set<IncomingCallListener>();
@@ -576,6 +606,79 @@ class ClinicRealtimeClient {
     }
   }
 
+  public async listCloudClinicMembers(): Promise<CloudClinicMembersResponse | null> {
+    if (this.isUnitTestRuntime()) return null;
+    if (typeof fetch !== 'function' || typeof window === 'undefined' || !window.location?.origin?.startsWith('http')) {
+      return null;
+    }
+    try {
+      const { token, headers } = await this.getAuthContext();
+      if (!token) return null;
+      const res = await fetch('/api/sql/clinic/members', {
+        cache: 'no-store',
+        headers,
+      });
+      if (!res.ok) return null;
+      const json = (await res.json()) as CloudClinicMembersResponse & { ok?: boolean };
+      return json && json.ok ? json : null;
+    } catch {
+      return null;
+    }
+  }
+
+  public async upsertCloudClinicMember(input: {
+    email: string;
+    displayName: string;
+    role: CloudMemberRole;
+    canEditPrices: boolean;
+  }): Promise<{ ok: boolean; member?: CloudClinicMember; error?: string }> {
+    if (this.isUnitTestRuntime()) return { ok: false, error: 'Test runtime' };
+    try {
+      const { token, headers } = await this.getAuthContext();
+      if (!token) return { ok: false, error: 'برای ثبت دسترسی پرسنل ابتدا با حساب گوگل وارد شوید.' };
+      const res = await fetch('/api/sql/clinic/members', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...headers },
+        body: JSON.stringify(input),
+      });
+      const json = (await res.json()) as { ok?: boolean; member?: CloudClinicMember; error?: string };
+      if (!res.ok) {
+        return { ok: false, error: json.error || 'خطا در ثبت دسترسی پرسنل.' };
+      }
+      return { ok: true, member: json.member };
+    } catch {
+      return { ok: false, error: 'خطا در ارتباط با سرور کلینیک.' };
+    }
+  }
+
+  public async removeCloudClinicMember(memberId: number): Promise<{ ok: boolean; error?: string }> {
+    if (this.isUnitTestRuntime()) return { ok: false, error: 'Test runtime' };
+    try {
+      const { token, headers } = await this.getAuthContext();
+      if (!token) return { ok: false, error: 'ابتدا با حساب گوگل وارد شوید.' };
+      const res = await fetch(`/api/sql/clinic/members/${encodeURIComponent(String(memberId))}`, {
+        method: 'DELETE',
+        headers,
+      });
+      const json = (await res.json()) as { ok?: boolean; error?: string };
+      if (!res.ok) {
+        return { ok: false, error: json.error || 'حذف دسترسی پرسنل ناموفق بود.' };
+      }
+      return { ok: true };
+    } catch {
+      return { ok: false, error: 'خطا در ارتباط با سرور کلینیک.' };
+    }
+  }
+
+  public reconnectStream(): void {
+    this.reconnectAttempt = 0;
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+    this.activeStreamOpener?.();
+  }
+
   public connectStream(): () => void {
     if (this.isUnitTestRuntime()) return () => {};
     if (
@@ -586,7 +689,10 @@ class ClinicRealtimeClient {
       return () => {};
     }
 
-    const openSocket = () => {
+    let disposed = false;
+
+    const openSocket = async () => {
+      if (disposed) return;
       if (this.eventSource) {
         this.eventSource.close();
         this.eventSource = null;
@@ -594,7 +700,27 @@ class ClinicRealtimeClient {
 
       this.updateMeta({ connectionState: 'connecting' });
       try {
-        const es = new EventSource(`/api/clinic/stream?clientId=${encodeURIComponent(this.clientId)}`);
+        let streamUrl = `/api/clinic/stream?clientId=${encodeURIComponent(this.clientId)}`;
+        const { token, headers } = await this.getAuthContext();
+        if (token && !disposed) {
+          try {
+            const ticketRes = await fetch('/api/sql/clinic/stream-ticket', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', ...headers },
+            });
+            if (ticketRes.ok) {
+              const ticketJson = (await ticketRes.json()) as { ok?: boolean; ticket?: string };
+              if (ticketJson?.ok && ticketJson.ticket) {
+                streamUrl = `/api/sql/clinic/stream?ticket=${encodeURIComponent(ticketJson.ticket)}&clientId=${encodeURIComponent(this.clientId)}`;
+              }
+            }
+          } catch {
+            // fallback to local SSE stream if ticket endpoint is unreachable
+          }
+        }
+        if (disposed) return;
+
+        const es = new EventSource(streamUrl);
         this.eventSource = es;
 
         es.addEventListener('connected', (evt: MessageEvent) => {
@@ -666,26 +792,35 @@ class ClinicRealtimeClient {
           es.close();
           this.eventSource = null;
           this.updateMeta({ connectionState: 'offline' });
+          if (disposed) return;
           const delay = Math.min(20000, 1500 * Math.pow(1.6, this.reconnectAttempt));
           this.reconnectAttempt++;
           if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
-          this.reconnectTimer = setTimeout(openSocket, delay);
+          this.reconnectTimer = setTimeout(() => {
+            void openSocket();
+          }, delay);
         };
       } catch {
         this.updateMeta({ connectionState: 'offline' });
       }
     };
 
-    openSocket();
+    this.activeStreamOpener = () => {
+      void openSocket();
+    };
+
+    void openSocket();
 
     const handleOnline = () => {
       this.reconnectAttempt = 0;
       void this.fetchAuthoritativeState();
-      openSocket();
+      void openSocket();
     };
     window.addEventListener('online', handleOnline);
 
     return () => {
+      disposed = true;
+      this.activeStreamOpener = null;
       window.removeEventListener('online', handleOnline);
       if (this.reconnectTimer) {
         clearTimeout(this.reconnectTimer);
