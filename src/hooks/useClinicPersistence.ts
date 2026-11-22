@@ -5,6 +5,7 @@ import { indexedDbService } from '../services/indexedDbService';
 import { clinicalDb } from '../services/clinicalDatabase';
 import { supabaseService } from '../services/supabaseService';
 import { clinicRealtimeClient, LiveSyncStatusMeta } from '../services/clinicRealtimeClient';
+import { subscribeGoogleDriveAuth } from '../services/googleDriveBackupService';
 import { archiveToTrashVault, getTrashVaultItems, hydrateTrashVaultFromDb } from '../utils/dataProtection';
 import { buildPatientIndex } from '../utils/patientIndex';
 import type { ClinicDataMode } from '../utils/eccSchemas';
@@ -245,6 +246,27 @@ export function useClinicPersistence() {
         hasHydratedRef.current = true;
       });
 
+    let lastAuthedUid: string | null = null;
+    const unsubCloudAuth = subscribeGoogleDriveAuth((authSnap) => {
+      const uid = authSnap.user?.uid ?? null;
+      if (!uid || uid === lastAuthedUid) return;
+      lastAuthedUid = uid;
+      void clinicRealtimeClient.fetchAuthoritativeState().then((remote) => {
+        if (remote && remote.initialized) {
+          applyRemoteSnapshot(remote);
+        } else if (remote && !remote.initialized) {
+          void clinicRealtimeClient.pushClinicState({
+            patients: patientsRef.current,
+            appointments: appointmentsRef.current,
+            inventory: inventoryRef.current,
+            mode: dataModeRef.current,
+            actorName: authSnap.displayName || authSnap.email || 'مدیر کلینیک',
+            actorRole: 'admin',
+          });
+        }
+      });
+    });
+
     const isLiveProductionLocal = readStoredDataMode() === 'live_production';
 
     Promise.all([
@@ -349,6 +371,7 @@ export function useClinicPersistence() {
     return () => {
       unsubStatus();
       unsubRemote();
+      unsubCloudAuth();
       disconnectStream();
     };
   }, []);

@@ -17,6 +17,18 @@ import {
   stripDangerousObjectKeys,
   type ClinicDataMode,
 } from './src/utils/eccSchemas.ts';
+import { requireAuth, type AuthRequest } from './src/middleware/auth.ts';
+import { isCloudSqlConfigured } from './src/db/index.ts';
+import { getOrCreateUser } from './src/db/users.ts';
+import {
+  appendAuditLogInSql,
+  createBackupInSql,
+  getBackupSnapshotFromSql,
+  listAuditLogsInSql,
+  listBackupsInSql,
+  loadClinicStoreFromSql,
+  saveClinicStoreToSql,
+} from './src/db/clinicRepository.ts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -1136,6 +1148,488 @@ export async function createMinaDentalServer(options: CreateServerOptions = {}) 
       serverBackupsCount: backups.length,
       auditEventsCount: auditLogEntries.length,
     });
+  });
+
+  // -------------------------------------------------------------------------
+  // AUTHENTICATED CLOUD SQL (POSTGRESQL + DRIZZLE ORM) PERSISTENCE ENDPOINTS
+  // Secured by Firebase Auth Bearer ID token verification (requireAuth)
+  // -------------------------------------------------------------------------
+  const resolveSqlContext = async (req: AuthRequest) => {
+    const uid = req.user?.uid;
+    const email = req.user?.email || `${uid || 'user'}@minadental.local`;
+    if (!uid) {
+      throw new Error('Unauthorized: Missing user identity');
+    }
+    const dbUser = await getOrCreateUser(uid, email, req.user?.name || null);
+    const loaded = await loadClinicStoreFromSql(dbUser.id);
+    return { dbUser, workspaceId: loaded.workspaceId, store: loaded.store };
+  };
+
+  app.get('/api/sql/clinic/state', requireAuth, async (req: AuthRequest, res) => {
+    if (!isCloudSqlConfigured()) {
+      return res.status(503).json({ error: 'Database service unavailable' });
+    }
+    try {
+      const { store } = await resolveSqlContext(req);
+      return res.json({
+        ok: true,
+        ...store,
+        connectedClients: sseClients.size,
+      });
+    } catch (error: any) {
+      console.error('Failed to fetch Cloud SQL clinic state:', error);
+      return res.status(500).json({ error: error?.message || 'Failed to load clinic state' });
+    }
+  });
+
+  app.post('/api/sql/clinic/sync', requireAuth, async (req: AuthRequest, res) => {
+    if (!isCloudSqlConfigured()) {
+      return res.status(503).json({ error: 'Database service unavailable' });
+    }
+    const clientIp = req.ip || req.socket.remoteAddress || 'unknown';
+    if (isRateLimited(`sql-sync:${clientIp}`, SYNC_RATE_LIMIT_MAX)) {
+      return res.status(429).json({
+        error: 'تعداد درخواست‌های همگام‌سازی بیش از سقف مجاز در دقیقه است.',
+      });
+    }
+
+    const sanitizedBody = stripDangerousObjectKeys(req.body);
+    const parsed = clinicLiveSyncPayloadSchema.safeParse(sanitizedBody);
+    if (!parsed.success) {
+      return res.status(400).json({
+        error: parsed.error.issues[0]?.message || 'داده همگام‌سازی نامعتبر است.',
+      });
+    }
+
+    try {
+      const { workspaceId, store: currentSqlStore } = await resolveSqlContext(req);
+      const {
+        clientId,
+        actorName,
+        actorRole,
+        baseRevision,
+        mode,
+        patients,
+        appointments,
+        inventory,
+        users,
+        clinicConfig,
+        deletedPatientIds,
+        deletedAppointmentIds,
+      } = parsed.data;
+
+      const isConcurrentEdit =
+        currentSqlStore.initialized &&
+        typeof baseRevision === 'number' &&
+        baseRevision < currentSqlStore.revision;
+
+      const deletedPatientsSet = new Set(deletedPatientIds || []);
+      const deletedAppointmentsSet = new Set(deletedAppointmentIds || []);
+
+      const nextPatients = isConcurrentEdit
+        ? mergePatientEntities(
+            currentSqlStore.patients,
+            patients as Record<string, unknown>[],
+            deletedPatientsSet
+          )
+        : (patients as Record<string, unknown>[]);
+
+      const nextAppointments = isConcurrentEdit
+        ? mergeGenericEntitiesById(
+            currentSqlStore.appointments,
+            appointments as Record<string, unknown>[],
+            deletedAppointmentsSet
+          )
+        : (appointments as Record<string, unknown>[]);
+
+      const nextInventory = isConcurrentEdit
+        ? mergeGenericEntitiesById(
+            currentSqlStore.inventory,
+            inventory as Record<string, unknown>[],
+            new Set<string>()
+          )
+        : (inventory as Record<string, unknown>[]);
+
+      const nextUsers = Array.isArray(users)
+        ? sanitizeSyncedUsers(users as Record<string, unknown>[])
+        : currentSqlStore.users;
+
+      const nextClinicConfig =
+        clinicConfig && typeof clinicConfig === 'object'
+          ? { ...currentSqlStore.clinicConfig, ...(clinicConfig as Record<string, unknown>) }
+          : currentSqlStore.clinicConfig;
+
+      const nextStore: PersistedClinicStore = {
+        initialized: true,
+        revision: currentSqlStore.revision + 1,
+        mode: mode ?? currentSqlStore.mode,
+        updatedAt: new Date().toISOString(),
+        updatedBy: actorName || req.user?.email || 'پرسنل کلینیک',
+        patients: nextPatients,
+        appointments: nextAppointments,
+        inventory: nextInventory,
+        users: nextUsers,
+        clinicConfig: nextClinicConfig,
+      };
+
+      await saveClinicStoreToSql(workspaceId, nextStore);
+
+      // Keep local SSE memory cache aligned for multi-device broadcast
+      clinicStore = nextStore;
+
+      if (nextStore.revision === 1 || nextStore.revision % 10 === 0) {
+        try {
+          await createBackupInSql(
+            workspaceId,
+            nextStore,
+            `بکاپ خودکار کلینیک (Rev #${nextStore.revision})`,
+            nextStore.updatedBy
+          );
+        } catch {
+          // non-fatal rolling backup failure
+        }
+      }
+
+      if (isConcurrentEdit) {
+        try {
+          await appendAuditLogInSql(workspaceId, {
+            actor: nextStore.updatedBy,
+            role: actorRole || 'staff',
+            action: 'ادغام خودکار ویرایش همزمان چنددستگاهی',
+            details: `تغییرات نسخه ${baseRevision} با نسخه ${currentSqlStore.revision} بدون از دست رفتن اطلاعات ادغام شد.`,
+            severity: 'warning',
+          });
+        } catch {
+          // non-fatal audit log failure
+        }
+      }
+
+      broadcastSse(
+        'clinic-sync',
+        {
+          sourceClientId: clientId,
+          actorName: nextStore.updatedBy,
+          actorRole: actorRole || 'staff',
+          revision: nextStore.revision,
+          mode: nextStore.mode,
+          updatedAt: nextStore.updatedAt,
+          updatedBy: nextStore.updatedBy,
+          connectedClients: sseClients.size,
+          mergedConflict: isConcurrentEdit,
+          patients: nextStore.patients,
+          appointments: nextStore.appointments,
+          inventory: nextStore.inventory,
+          users: nextStore.users,
+          clinicConfig: nextStore.clinicConfig,
+        },
+        clientId
+      );
+
+      return res.json({
+        ok: true,
+        revision: nextStore.revision,
+        mode: nextStore.mode,
+        updatedAt: nextStore.updatedAt,
+        connectedClients: sseClients.size,
+        mergedConflict: isConcurrentEdit,
+        ...(isConcurrentEdit
+          ? {
+              patients: nextStore.patients,
+              appointments: nextStore.appointments,
+              inventory: nextStore.inventory,
+              users: nextStore.users,
+              clinicConfig: nextStore.clinicConfig,
+            }
+          : {}),
+      });
+    } catch (error: any) {
+      console.error('Failed to sync Cloud SQL clinic state:', error);
+      return res.status(500).json({ error: error?.message || 'Failed to sync clinic state' });
+    }
+  });
+
+  app.post('/api/sql/clinic/mode', requireAuth, async (req: AuthRequest, res) => {
+    if (!isCloudSqlConfigured()) {
+      return res.status(503).json({ error: 'Database service unavailable' });
+    }
+    const sanitizedBody = stripDangerousObjectKeys(req.body);
+    const parsed = clinicModeSwitchSchema.safeParse(sanitizedBody);
+    if (!parsed.success) {
+      return res.status(400).json({
+        error: parsed.error.issues[0]?.message || 'درخواست تغییر وضعیت کلینیک نامعتبر است.',
+      });
+    }
+    const { clientId, actorName, isManager, mode, preserveInventory, inventory } = parsed.data;
+    if (!isManager) {
+      return res.status(403).json({
+        error: '⛔ تغییر حالت کلینیک و پاک‌سازی داده‌های نمایشی فقط برای مدیر کلینیک مجاز است.',
+      });
+    }
+
+    try {
+      const { workspaceId, store: currentSqlStore } = await resolveSqlContext(req);
+      if (currentSqlStore.initialized) {
+        try {
+          await createBackupInSql(
+            workspaceId,
+            currentSqlStore,
+            `بکاپ خودکار پیش از تغییر وضعیت به ${mode === 'live_production' ? 'عملیاتی مطب' : 'نمایشی'}`,
+            actorName || req.user?.email || 'مدیر کلینیک'
+          );
+        } catch {
+          // non-fatal pre-switch backup
+        }
+      }
+
+      const nextInventory =
+        preserveInventory === false
+          ? []
+          : Array.isArray(inventory)
+          ? (inventory as Record<string, unknown>[])
+          : currentSqlStore.inventory;
+
+      const nextStore: PersistedClinicStore = {
+        ...currentSqlStore,
+        initialized: true,
+        revision: currentSqlStore.revision + 1,
+        mode,
+        updatedAt: new Date().toISOString(),
+        updatedBy: actorName || req.user?.email || 'مدیر کلینیک',
+        patients: mode === 'live_production' ? [] : currentSqlStore.patients,
+        appointments: mode === 'live_production' ? [] : currentSqlStore.appointments,
+        inventory: nextInventory,
+      };
+
+      await saveClinicStoreToSql(workspaceId, nextStore);
+      clinicStore = nextStore;
+
+      try {
+        await appendAuditLogInSql(workspaceId, {
+          actor: nextStore.updatedBy,
+          role: 'admin',
+          action: mode === 'live_production' ? 'شروع حالت عملیاتی واقعی کلینیک' : 'تغییر وضعیت کلینیک به نمایشی',
+          details: `وضعیت کلینیک با حفظ بکاپ پیشین تغییر یافت (Rev #${nextStore.revision}).`,
+          severity: 'critical',
+        });
+      } catch {
+        // non-fatal audit log
+      }
+
+      broadcastSse(
+        'clinic-sync',
+        {
+          sourceClientId: clientId,
+          actorName: nextStore.updatedBy,
+          actorRole: 'admin',
+          revision: nextStore.revision,
+          mode: nextStore.mode,
+          updatedAt: nextStore.updatedAt,
+          updatedBy: nextStore.updatedBy,
+          connectedClients: sseClients.size,
+          patients: nextStore.patients,
+          appointments: nextStore.appointments,
+          inventory: nextStore.inventory,
+          users: nextStore.users,
+          clinicConfig: nextStore.clinicConfig,
+        },
+        clientId
+      );
+
+      return res.json({
+        ok: true,
+        mode: nextStore.mode,
+        revision: nextStore.revision,
+        updatedAt: nextStore.updatedAt,
+      });
+    } catch (error: any) {
+      console.error('Failed to switch Cloud SQL clinic mode:', error);
+      return res.status(500).json({ error: error?.message || 'Failed to switch clinic mode' });
+    }
+  });
+
+  app.get('/api/sql/clinic/backups', requireAuth, async (req: AuthRequest, res) => {
+    if (!isCloudSqlConfigured()) {
+      return res.status(503).json({ error: 'Database service unavailable' });
+    }
+    try {
+      const { workspaceId } = await resolveSqlContext(req);
+      const backups = await listBackupsInSql(workspaceId);
+      return res.json({ ok: true, backups });
+    } catch (error: any) {
+      console.error('Failed to list Cloud SQL backups:', error);
+      return res.status(500).json({ error: error?.message || 'Failed to load backups' });
+    }
+  });
+
+  app.post('/api/sql/clinic/backups', requireAuth, async (req: AuthRequest, res) => {
+    if (!isCloudSqlConfigured()) {
+      return res.status(503).json({ error: 'Database service unavailable' });
+    }
+    const sanitizedBody = stripDangerousObjectKeys(req.body);
+    const parsed = serverBackupCreateSchema.safeParse(sanitizedBody);
+    if (!parsed.success) {
+      return res.status(400).json({
+        error: parsed.error.issues[0]?.message || 'اطلاعات ایجاد بکاپ نامعتبر است.',
+      });
+    }
+    try {
+      const { workspaceId, store } = await resolveSqlContext(req);
+      const label = parsed.data.label || `اسنپ‌شات دستی (${new Date().toISOString().slice(0, 10)})`;
+      const actor = parsed.data.actorName || req.user?.email || 'مدیر کلینیک';
+      const meta = await createBackupInSql(workspaceId, store, label, actor);
+      try {
+        await appendAuditLogInSql(workspaceId, {
+          actor,
+          role: 'admin',
+          action: 'ثبت نسخه پشتیبان جدید',
+          details: `اسنپ‌شات «${label}» ثبت شد.`,
+          severity: 'info',
+          targetId: meta.id,
+        });
+      } catch {
+        // non-fatal audit log
+      }
+      return res.json({ ok: true, backup: meta });
+    } catch (error: any) {
+      console.error('Failed to create Cloud SQL backup:', error);
+      return res.status(500).json({ error: error?.message || 'Failed to create backup' });
+    }
+  });
+
+  app.post('/api/sql/clinic/backups/restore', requireAuth, async (req: AuthRequest, res) => {
+    if (!isCloudSqlConfigured()) {
+      return res.status(503).json({ error: 'Database service unavailable' });
+    }
+    const sanitizedBody = stripDangerousObjectKeys(req.body);
+    const parsed = serverBackupRestoreSchema.safeParse(sanitizedBody);
+    if (!parsed.success) {
+      return res.status(400).json({
+        error: parsed.error.issues[0]?.message || 'شناسه نسخه پشتیبان نامعتبر است.',
+      });
+    }
+    const { snapshotId, actorName, isManager, clientId } = parsed.data;
+    if (!isManager) {
+      return res.status(403).json({
+        error: '⛔ بازیابی نسخه پشتیبان فقط توسط مدیر کلینیک مجاز است.',
+      });
+    }
+    if (!SAFE_BACKUP_SNAPSHOT_ID_REGEX.test(snapshotId)) {
+      return res.status(400).json({ error: 'شناسه فایل پشتیبان غیرمجاز است.' });
+    }
+    try {
+      const { workspaceId, store: currentSqlStore } = await resolveSqlContext(req);
+      const snapshot = await getBackupSnapshotFromSql(workspaceId, snapshotId);
+      if (!snapshot) {
+        return res.status(404).json({ error: 'نسخه پشتیبان انتخاب‌شده یافت نشد.' });
+      }
+      try {
+        await createBackupInSql(
+          workspaceId,
+          currentSqlStore,
+          `بکاپ خودکار پیش از بازیابی ${snapshotId}`,
+          actorName || req.user?.email || 'مدیر کلینیک'
+        );
+      } catch {
+        // non-fatal safety snapshot
+      }
+      const nextStore: PersistedClinicStore = {
+        ...snapshot.state,
+        initialized: true,
+        revision: currentSqlStore.revision + 1,
+        updatedAt: new Date().toISOString(),
+        updatedBy: actorName || req.user?.email || 'مدیر کلینیک',
+      };
+      await saveClinicStoreToSql(workspaceId, nextStore);
+      clinicStore = nextStore;
+
+      try {
+        await appendAuditLogInSql(workspaceId, {
+          actor: nextStore.updatedBy,
+          role: 'admin',
+          action: 'بازیابی نسخه پشتیبان',
+          details: `نسخه «${snapshot.meta.label}» با موفقیت بازیابی شد.`,
+          severity: 'critical',
+          targetId: snapshotId,
+        });
+      } catch {
+        // non-fatal audit log
+      }
+
+      broadcastSse(
+        'clinic-sync',
+        {
+          sourceClientId: clientId,
+          actorName: nextStore.updatedBy,
+          actorRole: 'admin',
+          revision: nextStore.revision,
+          mode: nextStore.mode,
+          updatedAt: nextStore.updatedAt,
+          updatedBy: nextStore.updatedBy,
+          connectedClients: sseClients.size,
+          patients: nextStore.patients,
+          appointments: nextStore.appointments,
+          inventory: nextStore.inventory,
+          users: nextStore.users,
+          clinicConfig: nextStore.clinicConfig,
+        },
+        clientId
+      );
+
+      return res.json({
+        ok: true,
+        revision: nextStore.revision,
+        mode: nextStore.mode,
+        patients: nextStore.patients,
+        appointments: nextStore.appointments,
+        inventory: nextStore.inventory,
+      });
+    } catch (error: any) {
+      console.error('Failed to restore Cloud SQL backup:', error);
+      return res.status(500).json({ error: error?.message || 'Failed to restore backup' });
+    }
+  });
+
+  app.get('/api/sql/clinic/audit-log', requireAuth, async (req: AuthRequest, res) => {
+    if (!isCloudSqlConfigured()) {
+      return res.status(503).json({ error: 'Database service unavailable' });
+    }
+    const limitParam = Number(req.query.limit || 40);
+    const limit = Number.isFinite(limitParam) ? Math.min(200, Math.max(1, limitParam)) : 40;
+    try {
+      const { workspaceId } = await resolveSqlContext(req);
+      const entries = await listAuditLogsInSql(workspaceId, limit);
+      return res.json({ ok: true, entries });
+    } catch (error: any) {
+      console.error('Failed to fetch Cloud SQL audit logs:', error);
+      return res.status(500).json({ error: error?.message || 'Failed to fetch audit log' });
+    }
+  });
+
+  app.post('/api/sql/clinic/audit-log', requireAuth, async (req: AuthRequest, res) => {
+    if (!isCloudSqlConfigured()) {
+      return res.status(503).json({ error: 'Database service unavailable' });
+    }
+    const sanitizedBody = stripDangerousObjectKeys(req.body);
+    const parsed = serverAuditEventCreateSchema.safeParse(sanitizedBody);
+    if (!parsed.success) {
+      return res.status(400).json({
+        error: parsed.error.issues[0]?.message || 'رویداد ثبت ممیزی نامعتبر است.',
+      });
+    }
+    try {
+      const { workspaceId } = await resolveSqlContext(req);
+      const entry = await appendAuditLogInSql(workspaceId, {
+        actor: parsed.data.actor,
+        role: parsed.data.role || 'staff',
+        action: parsed.data.action,
+        details: parsed.data.details || '',
+        severity: parsed.data.severity || 'info',
+      });
+      return res.json({ ok: true, entry });
+    } catch (error: any) {
+      console.error('Failed to append Cloud SQL audit log:', error);
+      return res.status(500).json({ error: error?.message || 'Failed to record audit event' });
+    }
   });
 
   // -------------------------------------------------------------------------

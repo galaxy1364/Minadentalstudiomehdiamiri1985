@@ -22,6 +22,11 @@ import { otaUpdateService, OtaReleaseInfo, ConnectedDeviceNode, DeploymentPipeli
 import { usePWAInstall } from '../../hooks/usePWAInstall';
 import { useEscapeKey } from '../../hooks/useDialogA11y';
 import { ViewportModalPortal } from '../ViewportModalPortal';
+import { GoogleDriveBackupPanel } from '../GoogleDriveBackupPanel';
+import {
+  getGoogleDriveAccessToken,
+  uploadBackupToGoogleDrive,
+} from '../../services/googleDriveBackupService';
 import { copyTextSafely } from '../../utils/clipboard';
 import { verifyClinicDataIntegrity } from '../../utils/integrityVerifier';
 import {
@@ -721,12 +726,27 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       title: 'بک‌آپ ابری و گوگل درایو ثبت شد',
       description: `اسنپ‌شات سه‌گانه برای حساب ${backupSchedule.driveEmail} و سرور کلینیک همگام‌سازی شد.`
     });
+    if (getGoogleDriveAccessToken()) {
+      void uploadBackupToGoogleDrive(json, { tag: 'manual' })
+        .then((uploaded) => {
+          actionFeedback.recordSuccess({
+            title: 'بک‌آپ مستقیم در گوگل درایو ذخیره شد',
+            subtitle: `${uploaded.name} · ${snap.jalaliTimestamp}`,
+            badgeText: '✓ آپلود واقعی Drive'
+          });
+          showToast(`فایل پشتیبان «${uploaded.name}» با موفقیت در Google Drive شما ذخیره شد.`);
+        })
+        .catch(() => {
+          showToast('اسنپ‌شات لوکال ثبت شد؛ برای آپلود مستقیم در گوگل درایو مجدداً وارد حساب گوگل شوید.');
+        });
+      return;
+    }
     actionFeedback.recordSuccess({
       title: 'بک‌آپ آنی ابری و گوگل درایو ثبت شد',
       subtitle: `مقصد: ${backupSchedule.driveEmail} · ${snap.jalaliTimestamp}`,
       badgeText: '✓ سینک ابری موفق'
     });
-    showToast(`نسخه پشتیبان رمزنگاری‌شده در Google Drive (${backupSchedule.driveEmail}) و اسنپ‌شات لوکال ثبت شد.`);
+    showToast(`اسنپ‌شات ثبت شد. برای ارسال خودکار به Google Drive، در کارت گوگل درایو زیر با حساب گوگل وارد شوید.`);
   };
 
   const handleExportPatientsCsv = () => {
@@ -3036,6 +3056,16 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   </div>
                 )}
               </div>
+
+              {/* 4B. Live Google Drive Auto-Backup & Restore Panel */}
+              <GoogleDriveBackupPanel
+                isManager={isClinicManager(currentUser)}
+                buildBackupJson={buildClinicBackupJson}
+                onRestoreBackupData={(restored) => {
+                  applyRestoredPayload(restored, 'Google Drive');
+                }}
+                onNotify={(msg) => showToast(msg)}
+              />
 
               {/* 5. Full Source Code ZIP Download Card */}
               <div className="bg-gradient-to-br from-amber-500/10 via-white to-amber-500/5 backdrop-blur-md rounded-[22px] p-4 shadow-2xs border border-amber-300/80 space-y-3">

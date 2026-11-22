@@ -46,6 +46,7 @@ import { clinicRealtimeClient } from './services/clinicRealtimeClient';
 import { otaUpdateService } from './services/otaUpdateService';
 import { useClinicPersistence } from './hooks/useClinicPersistence';
 import { useClinicAuth } from './hooks/useClinicAuth';
+import { useGoogleDriveAutoBackup } from './hooks/useGoogleDriveAutoBackup';
 import { normalizePhoneLast7 } from './utils/patientIndex';
 import { useEscapeKey } from './hooks/useDialogA11y';
 import { ViewportModalPortal } from './components/ViewportModalPortal';
@@ -342,6 +343,22 @@ export default function App() {
   const [universalScannerOpen, setUniversalScannerOpen] = useState(false);
   const [universalScannerScope, setUniversalScannerScope] = useState<'all' | 'inventory' | 'lab' | 'patient' | 'sterilization' | 'sayad_check'>('all');
   const [scannedSayadDraft, setScannedSayadDraft] = useState<{ sayadId?: string; bankName?: string } | null>(null);
+
+  useGoogleDriveAutoBackup({
+    clinicName: 'مرکز تخصصی دندانپزشکی مینادنتال',
+    patients,
+    appointments,
+    inventory,
+    users,
+    platforms,
+    onAutoBackupSaved: (fileName) => {
+      actionFeedback.recordSuccess({
+        title: 'بک‌آپ خودکار گوگل درایو ثبت شد',
+        subtitle: fileName,
+        badgeText: '✓ Google Drive',
+      });
+    },
+  });
 
   const handleApplyRealTestData = (data: {
     patient: Patient;

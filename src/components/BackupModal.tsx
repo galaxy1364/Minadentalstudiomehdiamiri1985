@@ -12,6 +12,11 @@ import { useEscapeKey } from '../hooks/useDialogA11y';
 import { verifyClinicDataIntegrity } from '../utils/integrityVerifier';
 import { ViewportModalPortal } from './ViewportModalPortal';
 import { parseAndValidateClinicBackup } from '../utils/eccSchemas';
+import { GoogleDriveBackupPanel } from './GoogleDriveBackupPanel';
+import {
+  getGoogleDriveAccessToken,
+  uploadBackupToGoogleDrive,
+} from '../services/googleDriveBackupService';
 
 interface BackupHistoryEntry {
   id: string;
@@ -160,9 +165,24 @@ export const BackupModal: React.FC<BackupModalProps> = ({
       users,
       platforms
     });
+    if (getGoogleDriveAccessToken()) {
+      void uploadBackupToGoogleDrive(json, { tag: 'manual' })
+        .then((uploaded) => {
+          recordBackupEntry('آپلود واقعی Google Drive');
+          setSuccessMsg(`نسخه پشتیبان «${uploaded.name}» با موفقیت در گوگل درایو ذخیره شد.`);
+          setTimeout(() => setSuccessMsg(null), 5000);
+        })
+        .catch(() => {
+          syncEngine.downloadBackupFile(json, `minadental_gdrive_snapshot_${Date.now()}.json`);
+          recordBackupEntry('اسنپ‌شات Google Drive');
+          setSuccessMsg('آپلود مستقیم ناموفق بود؛ فایل بکاپ روی دستگاه ذخیره شد.');
+          setTimeout(() => setSuccessMsg(null), 5000);
+        });
+      return;
+    }
     syncEngine.downloadBackupFile(json, `minadental_gdrive_snapshot_${Date.now()}.json`);
     recordBackupEntry('اسنپ‌شات Google Drive');
-    setSuccessMsg('فایل همگام‌ساز گوگل درایو (Google Drive Snapshot) آماده ذخیره شد.');
+    setSuccessMsg('فایل پشتیبان آماده شد. برای آپلود خودکار، در بخش گوگل درایو با حساب گوگل وارد شوید.');
     setTimeout(() => setSuccessMsg(null), 4000);
   };
 
@@ -184,6 +204,9 @@ export const BackupModal: React.FC<BackupModalProps> = ({
           setServerBackups((prev) => [res.backup!, ...prev.filter((b) => b.id !== res.backup!.id)]);
         }
       });
+    if (getGoogleDriveAccessToken()) {
+      void uploadBackupToGoogleDrive(json, { tag: 'manual' }).catch(() => {});
+    }
     syncEngine.broadcast({
       type: 'CLOUD_BACKUP_SAVED',
       performedBy: 'admin',
@@ -367,6 +390,30 @@ export const BackupModal: React.FC<BackupModalProps> = ({
             </button>
           </div>
         </div>
+
+        {/* Live Google Drive Auto-Backup & Restore Panel */}
+        <GoogleDriveBackupPanel
+          compact
+          isManager={isManager}
+          buildBackupJson={() =>
+            syncEngine.exportBackup({
+              clinicName,
+              patients,
+              appointments,
+              inventory,
+              users,
+              platforms,
+            })
+          }
+          onRestoreBackupData={(restored) => {
+            if (onRestoreData) onRestoreData(restored);
+            recordBackupEntry('بازیابی از گوگل درایو');
+          }}
+          onNotify={(msg) => {
+            setSuccessMsg(msg);
+            setTimeout(() => setSuccessMsg(null), 5000);
+          }}
+        />
 
         {/* Cloud Sync Section */}
         <div className="p-4 rounded-2xl bg-white border border-emerald-200/80 shadow-2xs space-y-3">

@@ -3510,7 +3510,7 @@ describe('MD-TST-DOM: Interactive Happy-DOM & Multi-Module Verification', () => 
     expect(screen.getByText(/جهت ارسال در واتساپ کپی شد ✓/)).toBeTruthy();
     unmountComm();
 
-    // 4. InventoryQrScannerModal: GS1-128 extraction + editable unit price registration
+    // 4. InventoryQrScannerModal: real GS1-128 barcode input extraction + editable unit price registration
     const onRegisterScannedProduct = vi.fn();
     const { unmount: unmountQr } = render(
       React.createElement(InventoryQrScannerModal, {
@@ -3522,10 +3522,12 @@ describe('MD-TST-DOM: Interactive Happy-DOM & Multi-Module Verification', () => 
         onShowToast: vi.fn()
       })
     );
-    fireEvent.click(screen.getByRole('button', { name: /دیتای GS1-128 کامپوزیت 3M/ }));
+    const qrInput = screen.getByLabelText('ورود کد بارکد یا QR') as HTMLInputElement;
+    fireEvent.change(qrInput, { target: { value: '(01)00707387786521(17)280630(10)LOT3M99' } });
+    fireEvent.click(screen.getByRole('button', { name: 'ثبت' }));
     const priceInput = screen.getByLabelText('بهای واحد محصول استخراج‌شده') as HTMLInputElement;
     fireEvent.change(priceInput, { target: { value: '1850000' } });
-    fireEvent.click(screen.getByRole('button', { name: /ثبت مستقیم محصول در انبار کلینیک ✓/ }));
+    fireEvent.click(screen.getByRole('button', { name: /ثبت در انبار/ }));
     expect(onRegisterScannedProduct).toHaveBeenCalledWith(
       expect.objectContaining({
         pricePerUnit: 1850000
@@ -3533,7 +3535,7 @@ describe('MD-TST-DOM: Interactive Happy-DOM & Multi-Module Verification', () => 
     );
     unmountQr();
 
-    // 5. UniversalClinicScannerModal: inventory scan + quick +5 stock delta button
+    // 5. UniversalClinicScannerModal: real inventory barcode scan + quick +5 stock delta button
     const onUpdateInventoryStock = vi.fn();
     const firstInv = INITIAL_INVENTORY[0];
     const { unmount: unmountUni } = render(
@@ -3547,9 +3549,11 @@ describe('MD-TST-DOM: Interactive Happy-DOM & Multi-Module Verification', () => 
         onShowToast: vi.fn()
       })
     );
-    fireEvent.click(screen.getByRole('button', { name: 'متریال انبار' }));
+    const uniInput = screen.getByLabelText('ورود کد بارکد یا QR') as HTMLInputElement;
+    fireEvent.change(uniInput, { target: { value: firstInv.barcode || firstInv.id } });
+    fireEvent.click(screen.getByRole('button', { name: 'ثبت' }));
     fireEvent.click(screen.getByRole('button', { name: 'بسته (+۵)' }));
-    fireEvent.click(screen.getByRole('button', { name: /ثبت موجودی و اسکن بعدی/ }));
+    fireEvent.click(screen.getByRole('button', { name: /ثبت موجودی/ }));
     expect(onUpdateInventoryStock).toHaveBeenCalledWith(firstInv.id, firstInv.stock + 5);
     unmountUni();
 
